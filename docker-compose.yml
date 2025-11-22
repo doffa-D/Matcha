@@ -1,0 +1,54 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: matcha_postgres
+    env_file:
+      - backend/.env
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - matcha-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: matcha_backend
+    env_file:
+      - backend/.env
+    environment:
+      DB_HOST: postgres
+      FLASK_ENV: development
+      FLASK_DEBUG: "1"
+      FLASK_APP: app:create_app
+      WERKZEUG_RELOADER_TYPE: stat
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - matcha-network
+    command: python run.py
+
+volumes:
+  postgres_data:
+  uploads_data:
+
+networks:
+  matcha-network:
+    driver: bridge
+

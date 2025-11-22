@@ -1,0 +1,6 @@
+POST /api/auth/register
+GET /api/auth/verify/<token>
+POST /api/auth/login
+POST /api/auth/forgot-password
+POST /api/auth/reset-password
+POST /api/auth/logout
