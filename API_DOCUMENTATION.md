@@ -2,7 +2,9 @@
 
 **Base URL:** `http://localhost:5000`
 
-**API Prefix:** `/api/auth`
+**API Prefixes:** 
+- `/api/auth` - Authentication endpoints
+- `/api/profile` - Profile management endpoints
 
 ---
 
@@ -1073,6 +1075,615 @@ axios.interceptors.response.use(
 
 ---
 
+## Profile Endpoints
+
+### 1. Get Current User Profile
+
+**Endpoint:** `GET /api/profile/me`
+
+**Description:** Get the current authenticated user's complete profile including images, tags, and location.
+
+**Headers:**
+```
+Authorization: Bearer <JWT_TOKEN>
+Content-Type: application/json
+```
+
+**Request Body:**
+```
+None required
+```
+
+**Success Response (200 OK):**
+```json
+{
+  "id": 16,
+  "username": "johndoe",
+  "email": "user@example.com",
+  "first_name": "John",
+  "last_name": "Doe",
+  "bio": "Love traveling and coding",
+  "gender": "Male",
+  "sexual_preference": "Straight",
+  "location": {
+    "latitude": 40.7128,
+    "longitude": -74.0060
+  },
+  "age": 30,
+  "date_of_birth": "1995-05-15",
+  "fame_rating": 0.0,
+  "is_verified": true,
+  "last_online": "2025-11-24T14:18:48.233026",
+  "created_at": "2025-11-24T10:56:22.272273",
+  "images": [
+    {
+      "id": 1,
+      "file_path": "/uploads/user_16/image1.jpg",
+      "is_profile_pic": true,
+      "created_at": "2025-11-24T11:00:00"
+    }
+  ],
+  "tags": [
+    {
+      "id": 1,
+      "tag_name": "#vegan"
+    },
+    {
+      "id": 2,
+      "tag_name": "#geek"
+    }
+  ]
+}
+```
+
+**Error Responses:**
+
+**401 Unauthorized - Missing/Invalid Token:**
+```json
+{
+  "error": "Token is missing"
+}
+```
+or
+```json
+{
+  "error": "Token is invalid, expired, or blacklisted"
+}
+```
+
+**404 Not Found:**
+```json
+{
+  "error": "User not found"
+}
+```
+
+**500 Internal Server Error:**
+```json
+{
+  "error": "Failed to get profile: [error details]"
+}
+```
+
+**Frontend Usage (JavaScript/React):**
+```javascript
+const getProfile = async () => {
+  const token = localStorage.getItem('token');
+  
+  try {
+    const response = await fetch('http://localhost:5000/api/profile/me', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      console.log('Profile:', data);
+      return { success: true, profile: data };
+    } else {
+      console.error('Failed to get profile:', data.error);
+      return { success: false, error: data.error };
+    }
+  } catch (error) {
+    console.error('Network error:', error);
+    return { success: false, error: 'Network error occurred' };
+  }
+};
+```
+
+**Frontend Usage (Axios):**
+```javascript
+import axios from 'axios';
+
+const getProfile = async () => {
+  try {
+    const response = await axios.get('http://localhost:5000/api/profile/me', {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      }
+    });
+    
+    return { success: true, profile: response.data };
+  } catch (error) {
+    if (error.response) {
+      return { success: false, error: error.response.data.error };
+    } else {
+      return { success: false, error: 'Network error occurred' };
+    }
+  }
+};
+```
+
+**React Hook Example:**
+```javascript
+import { useState, useEffect } from 'react';
+
+const useProfile = () => {
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      const result = await getProfile();
+      if (result.success) {
+        setProfile(result.profile);
+      } else {
+        setError(result.error);
+      }
+      setLoading(false);
+    };
+    fetchProfile();
+  }, []);
+
+  return { profile, loading, error };
+};
+```
+
+---
+
+### 2. Update Profile
+
+**Endpoint:** `PUT /api/profile/update`
+
+**Description:** Update user profile fields. Only provided fields will be updated.
+
+**Headers:**
+```
+Authorization: Bearer <JWT_TOKEN>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "first_name": "John",
+  "last_name": "Doe",
+  "email": "newemail@example.com",
+  "bio": "Updated bio",
+  "gender": "Male",
+  "sexual_preference": "Straight",
+  "date_of_birth": "1995-05-15"
+}
+```
+
+**Field Validation:**
+- `first_name`: String (optional)
+- `last_name`: String (optional)
+- `email`: Valid email format, unique (optional)
+- `bio`: Text (optional)
+- `gender`: Must be one of: `Male`, `Female` (optional)
+- `sexual_preference`: Must be one of: `Straight`, `Gay`, `Bisexual` (optional)
+- `date_of_birth`: Format `YYYY-MM-DD`, user must be 18+ years old (optional)
+
+**Success Response (200 OK):**
+```json
+{
+  "message": "Profile updated successfully",
+  "updated_fields": ["first_name", "last_name", "bio", "gender", "sexual_preference", "date_of_birth"]
+}
+```
+
+**Error Responses:**
+
+**400 Bad Request - No Data:**
+```json
+{
+  "error": "No data provided"
+}
+```
+
+**400 Bad Request - Invalid Email Format:**
+```json
+{
+  "error": "Invalid email format"
+}
+```
+
+**400 Bad Request - Invalid Gender:**
+```json
+{
+  "error": "Invalid gender. Must be one of: Male, Female"
+}
+```
+
+**400 Bad Request - Invalid Sexual Preference:**
+```json
+{
+  "error": "Invalid sexual preference. Must be one of: Straight, Gay, Bisexual"
+}
+```
+
+**400 Bad Request - Invalid Date Format:**
+```json
+{
+  "error": "Invalid date format. Use YYYY-MM-DD"
+}
+```
+
+**400 Bad Request - Age Restriction:**
+```json
+{
+  "error": "You must be at least 18 years old"
+}
+```
+
+**409 Conflict - Email Already in Use:**
+```json
+{
+  "error": "Email already in use"
+}
+```
+
+**500 Internal Server Error:**
+```json
+{
+  "error": "Failed to update profile: [error details]"
+}
+```
+
+**Frontend Usage (JavaScript/React):**
+```javascript
+const updateProfile = async (profileData) => {
+  const token = localStorage.getItem('token');
+  
+  try {
+    const response = await fetch('http://localhost:5000/api/profile/update', {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(profileData)
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      console.log('Profile updated:', data.message);
+      return { success: true, message: data.message };
+    } else {
+      console.error('Update failed:', data.error);
+      return { success: false, error: data.error };
+    }
+  } catch (error) {
+    console.error('Network error:', error);
+    return { success: false, error: 'Network error occurred' };
+  }
+};
+```
+
+**React Component Example:**
+```javascript
+import { useState } from 'react';
+
+const ProfileEditForm = () => {
+  const [formData, setFormData] = useState({
+    first_name: '',
+    last_name: '',
+    bio: '',
+    gender: '',
+    sexual_preference: '',
+    date_of_birth: ''
+  });
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setMessage('');
+
+    const result = await updateProfile(formData);
+    
+    if (result.success) {
+      setMessage(result.message);
+    } else {
+      setError(result.error);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input
+        type="text"
+        value={formData.first_name}
+        onChange={(e) => setFormData({...formData, first_name: e.target.value})}
+        placeholder="First Name"
+      />
+      <input
+        type="text"
+        value={formData.last_name}
+        onChange={(e) => setFormData({...formData, last_name: e.target.value})}
+        placeholder="Last Name"
+      />
+      <textarea
+        value={formData.bio}
+        onChange={(e) => setFormData({...formData, bio: e.target.value})}
+        placeholder="Bio"
+      />
+      <select
+        value={formData.gender}
+        onChange={(e) => setFormData({...formData, gender: e.target.value})}
+      >
+        <option value="">Select Gender</option>
+        <option value="Male">Male</option>
+        <option value="Female">Female</option>
+      </select>
+      <select
+        value={formData.sexual_preference}
+        onChange={(e) => setFormData({...formData, sexual_preference: e.target.value})}
+      >
+        <option value="">Select Preference</option>
+        <option value="Straight">Straight</option>
+        <option value="Gay">Gay</option>
+        <option value="Bisexual">Bisexual</option>
+      </select>
+      <input
+        type="date"
+        value={formData.date_of_birth}
+        onChange={(e) => setFormData({...formData, date_of_birth: e.target.value})}
+      />
+      {message && <div className="success">{message}</div>}
+      {error && <div className="error">{error}</div>}
+      <button type="submit">Update Profile</button>
+    </form>
+  );
+};
+```
+
+---
+
+### 3. Update Location
+
+**Endpoint:** `PUT /api/profile/location`
+
+**Description:** Update user GPS location. If GPS coordinates are not provided, automatically detects location from IP address.
+
+**Headers:**
+```
+Authorization: Bearer <JWT_TOKEN>
+Content-Type: application/json
+```
+
+**Request Body - With GPS:**
+```json
+{
+  "latitude": 40.7128,
+  "longitude": -74.0060
+}
+```
+
+**Request Body - Without GPS (IP Geolocation):**
+```json
+{}
+```
+or omit body entirely
+
+**Field Validation:**
+- `latitude`: Number between -90 and 90 (optional)
+- `longitude`: Number between -180 and 180 (optional)
+- If both are omitted, IP geolocation will be used
+
+**Success Response (200 OK) - GPS:**
+```json
+{
+  "message": "Location updated successfully",
+  "location": {
+    "latitude": 40.7128,
+    "longitude": -74.0060,
+    "source": "gps"
+  }
+}
+```
+
+**Success Response (200 OK) - IP Geolocation:**
+```json
+{
+  "message": "Location updated successfully",
+  "location": {
+    "latitude": 40.1234,
+    "longitude": -74.5678,
+    "source": "ip"
+  }
+}
+```
+
+**Error Responses:**
+
+**400 Bad Request - Invalid Latitude:**
+```json
+{
+  "error": "Invalid latitude. Must be between -90 and 90"
+}
+```
+
+**400 Bad Request - Invalid Longitude:**
+```json
+{
+  "error": "Invalid longitude. Must be between -180 and 180"
+}
+```
+
+**400 Bad Request - Invalid Format:**
+```json
+{
+  "error": "Invalid latitude/longitude format"
+}
+```
+
+**400 Bad Request - IP Geolocation Failed:**
+```json
+{
+  "error": "Could not determine location from IP. Please provide GPS coordinates.",
+  "ip": "172.18.0.1"
+}
+```
+
+**500 Internal Server Error:**
+```json
+{
+  "error": "Failed to update location: [error details]"
+}
+```
+
+**Frontend Usage (JavaScript/React):**
+```javascript
+const updateLocation = async (latitude, longitude) => {
+  const token = localStorage.getItem('token');
+  
+  try {
+    const body = {};
+    if (latitude !== null && longitude !== null) {
+      body.latitude = latitude;
+      body.longitude = longitude;
+    }
+    
+    const response = await fetch('http://localhost:5000/api/profile/location', {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      console.log('Location updated:', data.message);
+      return { success: true, location: data.location };
+    } else {
+      console.error('Update failed:', data.error);
+      return { success: false, error: data.error };
+    }
+  } catch (error) {
+    console.error('Network error:', error);
+    return { success: false, error: 'Network error occurred' };
+  }
+};
+```
+
+**React Component Example - GPS:**
+```javascript
+import { useState } from 'react';
+
+const LocationUpdate = () => {
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const handleGPSUpdate = async (e) => {
+    e.preventDefault();
+    setError('');
+    setMessage('');
+
+    const result = await updateLocation(parseFloat(latitude), parseFloat(longitude));
+    
+    if (result.success) {
+      setMessage(`Location updated: ${result.location.latitude}, ${result.location.longitude}`);
+    } else {
+      setError(result.error);
+    }
+  };
+
+  const handleAutoDetect = async () => {
+    setError('');
+    setMessage('');
+
+    const result = await updateLocation(null, null);
+    
+    if (result.success) {
+      setMessage(`Location detected: ${result.location.latitude}, ${result.location.longitude}`);
+    } else {
+      setError(result.error);
+    }
+  };
+
+  return (
+    <div>
+      <form onSubmit={handleGPSUpdate}>
+        <input
+          type="number"
+          step="any"
+          value={latitude}
+          onChange={(e) => setLatitude(e.target.value)}
+          placeholder="Latitude (-90 to 90)"
+          min="-90"
+          max="90"
+        />
+        <input
+          type="number"
+          step="any"
+          value={longitude}
+          onChange={(e) => setLongitude(e.target.value)}
+          placeholder="Longitude (-180 to 180)"
+          min="-180"
+          max="180"
+        />
+        <button type="submit">Update with GPS</button>
+      </form>
+      <button onClick={handleAutoDetect}>Auto-detect from IP</button>
+      {message && <div className="success">{message}</div>}
+      {error && <div className="error">{error}</div>}
+    </div>
+  );
+};
+```
+
+**Browser Geolocation API Example:**
+```javascript
+const updateLocationFromBrowser = async () => {
+  if (!navigator.geolocation) {
+    return { success: false, error: 'Geolocation not supported by browser' };
+  }
+
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const latitude = position.coords.latitude;
+        const longitude = position.coords.longitude;
+        const result = await updateLocation(latitude, longitude);
+        resolve(result);
+      },
+      async (error) => {
+        // GPS denied, try IP geolocation
+        console.log('GPS denied, using IP geolocation');
+        const result = await updateLocation(null, null);
+        resolve(result);
+      }
+    );
+  });
+};
+```
+
+---
+
 ## Error Handling Guide
 
 ### HTTP Status Codes
@@ -1191,6 +1802,44 @@ curl -X POST http://localhost:5000/api/auth/logout \
   -H "Authorization: Bearer YOUR_JWT_TOKEN_HERE"
 ```
 
+**Get Profile:**
+```bash
+curl -X GET http://localhost:5000/api/profile/me \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN_HERE"
+```
+
+**Update Profile:**
+```bash
+curl -X PUT http://localhost:5000/api/profile/update \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN_HERE" \
+  -d '{
+    "bio": "Updated bio",
+    "gender": "Male",
+    "sexual_preference": "Straight",
+    "date_of_birth": "1995-05-15"
+  }'
+```
+
+**Update Location (GPS):**
+```bash
+curl -X PUT http://localhost:5000/api/profile/location \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN_HERE" \
+  -d '{
+    "latitude": 40.7128,
+    "longitude": -74.0060
+  }'
+```
+
+**Update Location (IP Geolocation):**
+```bash
+curl -X PUT http://localhost:5000/api/profile/location \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN_HERE" \
+  -d '{}'
+```
+
 ### Postman Collection
 
 **Register Request:**
@@ -1257,6 +1906,50 @@ curl -X POST http://localhost:5000/api/auth/logout \
 - Replace `{token}` with JWT token from login response
 - Body: None required (empty JSON `{}` or omit)
 
+**Get Profile Request:**
+- Method: `GET`
+- URL: `http://localhost:5000/api/profile/me`
+- Headers: `Authorization: Bearer {token}`
+- Body: None required
+
+**Update Profile Request:**
+- Method: `PUT`
+- URL: `http://localhost:5000/api/profile/update`
+- Headers: 
+  - `Content-Type: application/json`
+  - `Authorization: Bearer {token}`
+- Body (raw JSON):
+```json
+{
+  "bio": "Updated bio",
+  "gender": "Male",
+  "sexual_preference": "Straight",
+  "date_of_birth": "1995-05-15"
+}
+```
+
+**Update Location Request (GPS):**
+- Method: `PUT`
+- URL: `http://localhost:5000/api/profile/location`
+- Headers: 
+  - `Content-Type: application/json`
+  - `Authorization: Bearer {token}`
+- Body (raw JSON):
+```json
+{
+  "latitude": 40.7128,
+  "longitude": -74.0060
+}
+```
+
+**Update Location Request (IP Geolocation):**
+- Method: `PUT`
+- URL: `http://localhost:5000/api/profile/location`
+- Headers: 
+  - `Content-Type: application/json`
+  - `Authorization: Bearer {token}`
+- Body: Empty JSON `{}` or omit
+
 **Postman Environment Variables:**
 Create a Postman environment with:
 - `base_url`: `http://localhost:5000`
@@ -1305,5 +1998,21 @@ pm.environment.set("token", pm.response.json().token);
    - Frontend should remove token from localStorage on logout
    - Use `Authorization: Bearer <token>` header for logout request
 
-9. **Base URL:** Change `localhost:5000` to your production domain when deploying.
+9. **Profile Management:**
+   - Age is automatically calculated from `date_of_birth` and stored in database
+   - If age is missing but `date_of_birth` exists, it will be calculated on profile fetch
+   - Profile update allows partial updates (only provided fields are updated)
+   - Email update does not require re-verification (per matcha.md requirements)
+   - Gender must be one of: `Male`, `Female`
+   - Sexual preference must be one of: `Straight`, `Gay`, `Bisexual`
+
+10. **Location Management:**
+    - Location can be updated via GPS coordinates or IP geolocation
+    - If GPS coordinates provided, they are stored directly
+    - If GPS not provided (empty body), IP geolocation is attempted
+    - IP geolocation uses `ip-api.com` service (free, no API key required)
+    - For testing through Docker, client can send public IP in `X-Client-Public-IP` header
+    - Location is stored as `latitude` and `longitude` in users table
+
+11. **Base URL:** Change `localhost:5000` to your production domain when deploying.
 

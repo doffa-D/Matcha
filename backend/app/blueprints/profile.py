@@ -115,7 +115,14 @@ def get_profile(current_user_id):
 @token_required
 def update_profile(current_user_id):
     """Update user profile fields"""
-    data = request.get_json()
+    # Handle empty JSON body gracefully
+    if not request.data:
+        data = {}
+    else:
+        try:
+            data = request.get_json() or {}
+        except:
+            data = {}
     
     if not data:
         return jsonify({'error': 'No data provided'}), 400
@@ -237,3 +244,90 @@ def update_profile(current_user_id):
         print(f"Update profile error: {e}")
         traceback.print_exc()
         return jsonify({'error': f'Failed to update profile: {str(e)}'}), 500
+
+
+@bp.route('/location', methods=['PUT'])
+@token_required
+def update_location(current_user_id):
+    """Update user GPS location. If GPS not provided, use IP geolocation."""
+    # Handle empty or missing JSON body - allow empty body for IP geolocation
+    try:
+        if request.is_json:
+            data = request.get_json() or {}
+        else:
+            data = {}
+    except:
+        data = {}
+    
+    latitude = None
+    longitude = None
+    
+    # Check if GPS coordinates provided
+    if data and 'latitude' in data and 'longitude' in data:
+        try:
+            latitude = float(data['latitude'])
+            longitude = float(data['longitude'])
+            
+            # Validate coordinates
+            if not (-90 <= latitude <= 90):
+                return jsonify({'error': 'Invalid latitude. Must be between -90 and 90'}), 400
+            if not (-180 <= longitude <= 180):
+                return jsonify({'error': 'Invalid longitude. Must be between -180 and 180'}), 400
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Invalid latitude/longitude format'}), 400
+    
+    # If GPS not provided, use IP geolocation
+    if latitude is None or longitude is None:
+        try:
+            import urllib.request
+            import json
+            
+            # Get client IP address (prefer custom header for testing, then proxy headers)
+            ip = (
+                request.headers.get('X-Client-Public-IP') or
+                request.headers.get('X-Forwarded-For', '').split(',')[0].strip() or
+                request.headers.get('X-Real-IP') or
+                request.remote_addr
+            )
+            
+            # Use ip-api.com to get location
+            url = f"http://ip-api.com/json/{ip}?fields=status,lat,lon"
+            with urllib.request.urlopen(url, timeout=5) as response:
+                geo_data = json.loads(response.read().decode())
+                
+                if geo_data.get('status') == 'success':
+                    latitude = geo_data.get('lat')
+                    longitude = geo_data.get('lon')
+                else:
+                    return jsonify({
+                        'error': 'Could not determine location from IP. Please provide GPS coordinates.',
+                        'ip': ip
+                    }), 400
+        except Exception as e:
+            import traceback
+            print(f"IP geolocation error: {e}")
+            traceback.print_exc()
+            return jsonify({'error': 'Failed to get location from IP'}), 500
+    
+    # Update location in database
+    try:
+        with Database() as db:
+            db.query(
+                "UPDATE users SET latitude = %s, longitude = %s WHERE id = %s",
+                (latitude, longitude, current_user_id)
+            )
+        
+        return jsonify({
+            'message': 'Location updated successfully',
+            'location': {
+                'latitude': latitude,
+                'longitude': longitude,
+                'source': 'gps' if data and 'latitude' in data and 'longitude' in data else 'ip'
+            }
+        }), 200
+    
+    except Exception as e:
+        import traceback
+        print(f"Update location error: {e}")
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to update location: {str(e)}'}), 500
