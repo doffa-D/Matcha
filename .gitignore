@@ -1,7 +1,7 @@
 # Environment variables
 .env
 backend/.env.local
-
+backend/static/
 # Python
 __pycache__/
 *.py[cod]
@@ -12,7 +12,7 @@ venv/
 env/
 ENV/
 .venv
-
+todo
 # IDE
 .vscode/
 .idea/
@@ -38,6 +38,13 @@ Thumbs.db
 # Uploads (keep directory structure but ignore files)
 static/uploads/*
 !static/uploads/.gitkeep
+
+# Cursor IDE
+.cursor/
+
+# Documentation (ignore all files in doc/ except API_DOCUMENTATION.md)
+doc/*
+!doc/API_DOCUMENTATION.md
 
 
 

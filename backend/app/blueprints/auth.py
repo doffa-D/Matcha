@@ -5,6 +5,7 @@ import re
 from datetime import datetime, timedelta
 from app.db import Database
 from app.utils.email import send_verification_email,send_password_reset_email
+from app.utils.password_validator import contains_dictionary_word
 from app.jwt import generate_token, verify_token, decode_token, token_required
 
 
@@ -33,6 +34,10 @@ def register():
     # Password validation (minimum 8 characters)
     if len(password) < 8:
         return jsonify({'error': 'Password must be at least 8 characters'}), 400
+    
+    # Password validation (dictionary words)
+    if contains_dictionary_word(password):
+        return jsonify({'error': 'Password cannot contain dictionary words'}), 400
     
     # Hash password
     password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
@@ -266,6 +271,10 @@ def reset_password(token):
     # Password validation (minimum 8 characters)
     if len(password) < 8:
         return jsonify({'error': 'Password must be at least 8 characters'}), 400
+    
+    # Password validation (dictionary words)
+    if contains_dictionary_word(password):
+        return jsonify({'error': 'Password cannot contain dictionary words'}), 400
     
     try:
         with Database() as db:

@@ -50,12 +50,10 @@ CREATE TABLE images (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     file_path VARCHAR(500) NOT NULL,
-    is_profile_pic BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_images_user_id ON images(user_id);
-CREATE INDEX idx_images_profile_pic ON images(user_id, is_profile_pic) WHERE is_profile_pic = TRUE;
 
 
 CREATE TABLE tags (

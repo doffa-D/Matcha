@@ -1118,8 +1118,7 @@ None required
   "images": [
     {
       "id": 1,
-      "file_path": "/uploads/user_16/image1.jpg",
-      "is_profile_pic": true,
+      "file_path": "/static/uploads/user_16/image1.jpg",
       "created_at": "2025-11-24T11:00:00"
     }
   ],
@@ -1684,6 +1683,975 @@ const updateLocationFromBrowser = async () => {
 
 ---
 
+### 4. Upload Profile Images
+
+**Endpoint:** `POST /api/profile/upload`
+
+**Description:** Upload one or multiple profile images. Maximum 5 images per user.
+
+**Headers:**
+```
+Authorization: Bearer <JWT_TOKEN>
+Content-Type: multipart/form-data
+```
+
+**Request Body:**
+- Form data with key `file` (can be single or multiple files)
+
+**Field Validation:**
+- **Extensions:** `.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`
+- **MIME Types:** `image/jpeg`, `image/png`, `image/gif`, `image/webp`
+- **Max Size:** 5MB per file
+- **Max Total:** 5 images per user
+
+**Success Response (201 Created):**
+```json
+{
+  "message": "Successfully uploaded 2 image(s)",
+  "uploaded_images": [
+    {
+      "id": 123,
+      "file_path": "/static/uploads/user_16/uuid-filename.jpg",
+      "filename": "original-name.jpg"
+    },
+    {
+      "id": 124,
+      "file_path": "/static/uploads/user_16/uuid-filename2.jpg",
+      "filename": "original-name2.jpg"
+    }
+  ]
+}
+```
+
+**Partial Success Response (201 Created):**
+```json
+{
+  "message": "Successfully uploaded 1 image(s), 1 failed",
+  "uploaded_images": [
+    {
+      "id": 123,
+      "file_path": "/static/uploads/user_16/uuid-filename.jpg",
+      "filename": "valid-image.jpg"
+    }
+  ],
+  "errors": [
+    "File 2 (invalid-file.txt): Invalid file type"
+  ]
+}
+```
+
+**Error Responses:**
+
+**400 Bad Request - No File:**
+```json
+{
+  "error": "No file provided"
+}
+```
+
+**400 Bad Request - Invalid File Type:**
+```json
+{
+  "error": "Invalid file type. Allowed types: jpg, jpeg, png, gif, webp"
+}
+```
+
+**400 Bad Request - File Too Large:**
+```json
+{
+  "error": "File too large. Maximum size: 5MB"
+}
+```
+
+**400 Bad Request - Maximum Images Reached:**
+```json
+{
+  "error": "Maximum 5 images allowed. Current: 5, Trying to add: 1"
+}
+```
+
+**500 Internal Server Error:**
+```json
+{
+  "error": "Failed to upload image: [error details]"
+}
+```
+
+**Frontend Usage (JavaScript/React):**
+```javascript
+const uploadImages = async (files) => {
+  const token = localStorage.getItem('token');
+  
+  try {
+    const formData = new FormData();
+    
+    // Add multiple files
+    for (let i = 0; i < files.length; i++) {
+      formData.append('file', files[i]);
+    }
+    
+    const response = await fetch('http://localhost:5000/api/profile/upload', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`
+        // Note: Don't set Content-Type for FormData, browser sets it automatically
+      },
+      body: formData
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      console.log('Images uploaded:', data.message);
+      return { success: true, images: data.uploaded_images };
+    } else {
+      console.error('Upload failed:', data.error);
+      return { success: false, error: data.error };
+    }
+  } catch (error) {
+    console.error('Network error:', error);
+    return { success: false, error: 'Network error occurred' };
+  }
+};
+```
+
+**Frontend Usage (Axios):**
+```javascript
+import axios from 'axios';
+
+const uploadImages = async (files) => {
+  try {
+    const formData = new FormData();
+    
+    // Add multiple files
+    for (let i = 0; i < files.length; i++) {
+      formData.append('file', files[i]);
+    }
+    
+    const response = await axios.post('http://localhost:5000/api/profile/upload', formData, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    
+    return { success: true, images: response.data.uploaded_images };
+  } catch (error) {
+    if (error.response) {
+      return { success: false, error: error.response.data.error };
+    } else {
+      return { success: false, error: 'Network error occurred' };
+    }
+  }
+};
+```
+
+**React Component Example:**
+```javascript
+import { useState } from 'react';
+
+const ImageUpload = () => {
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files);
+    
+    // Validate file count
+    if (files.length > 5) {
+      setError('Maximum 5 images allowed');
+      return;
+    }
+    
+    // Validate file sizes
+    const invalidFiles = files.filter(f => f.size > 5 * 1024 * 1024);
+    if (invalidFiles.length > 0) {
+      setError('Some files are too large. Maximum size: 5MB');
+      return;
+    }
+    
+    setSelectedFiles(files);
+    setError('');
+  };
+
+  const handleUpload = async (e) => {
+    e.preventDefault();
+    setError('');
+    setMessage('');
+
+    if (selectedFiles.length === 0) {
+      setError('Please select at least one image');
+      return;
+    }
+
+    const result = await uploadImages(selectedFiles);
+    
+    if (result.success) {
+      setMessage(`Successfully uploaded ${result.images.length} image(s)`);
+      setSelectedFiles([]);
+      // Refresh profile images
+    } else {
+      setError(result.error);
+    }
+  };
+
+  return (
+    <form onSubmit={handleUpload}>
+      <input
+        type="file"
+        accept=".jpg,.jpeg,.png,.gif,.webp"
+        multiple
+        onChange={handleFileSelect}
+      />
+      <p>Selected: {selectedFiles.length} file(s)</p>
+      {message && <div className="success">{message}</div>}
+      {error && <div className="error">{error}</div>}
+      <button type="submit" disabled={selectedFiles.length === 0}>
+        Upload Images
+      </button>
+    </form>
+  );
+};
+```
+
+---
+
+### 5. Delete Profile Image
+
+**Endpoint:** `DELETE /api/profile/images/<image_id>`
+
+**Description:** Delete a profile image by ID. Verifies ownership before deletion.
+
+**Headers:**
+```
+Authorization: Bearer <JWT_TOKEN>
+```
+
+**URL Parameters:**
+- `image_id` (integer, required): Image ID to delete (obtain from GET /api/profile/me)
+
+**Success Response (200 OK):**
+```json
+{
+  "message": "Image deleted successfully",
+  "deleted_image_id": 123
+}
+```
+
+**Error Responses:**
+
+**401 Unauthorized - Missing/Invalid Token:**
+```json
+{
+  "error": "Token is missing"
+}
+```
+
+**404 Not Found - Image Not Found:**
+```json
+{
+  "error": "Image not found"
+}
+```
+
+**500 Internal Server Error:**
+```json
+{
+  "error": "Failed to delete image: [error details]"
+}
+```
+
+**Frontend Usage (JavaScript/React):**
+```javascript
+const deleteImage = async (imageId) => {
+  const token = localStorage.getItem('token');
+  
+  try {
+    const response = await fetch(`http://localhost:5000/api/profile/images/${imageId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      console.log('Image deleted:', data.message);
+      return { success: true, deletedId: data.deleted_image_id };
+    } else {
+      console.error('Delete failed:', data.error);
+      return { success: false, error: data.error };
+    }
+  } catch (error) {
+    console.error('Network error:', error);
+    return { success: false, error: 'Network error occurred' };
+  }
+};
+```
+
+**Frontend Usage (Axios):**
+```javascript
+import axios from 'axios';
+
+const deleteImage = async (imageId) => {
+  try {
+    const response = await axios.delete(`http://localhost:5000/api/profile/images/${imageId}`, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      }
+    });
+    
+    return { success: true, deletedId: response.data.deleted_image_id };
+  } catch (error) {
+    if (error.response) {
+      return { success: false, error: error.response.data.error };
+    } else {
+      return { success: false, error: 'Network error occurred' };
+    }
+  }
+};
+```
+
+**React Component Example:**
+```javascript
+import { useState } from 'react';
+
+const ImageGallery = ({ images, onImageDeleted }) => {
+  const [deleting, setDeleting] = useState(null);
+
+  const handleDelete = async (imageId) => {
+    if (!confirm('Are you sure you want to delete this image?')) {
+      return;
+    }
+
+    setDeleting(imageId);
+    const result = await deleteImage(imageId);
+    setDeleting(null);
+    
+    if (result.success) {
+      // Remove image from state or refresh profile
+      onImageDeleted(imageId);
+    } else {
+      alert(result.error);
+    }
+  };
+
+  return (
+    <div className="image-gallery">
+      {images.map(image => (
+        <div key={image.id} className="image-item">
+          <img src={image.file_path} alt="Profile" />
+          <button 
+            onClick={() => handleDelete(image.id)}
+            disabled={deleting === image.id}
+          >
+            {deleting === image.id ? 'Deleting...' : 'Delete'}
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+};
+```
+
+---
+
+### 6. Add Tags to Profile
+
+**Endpoint:** `POST /api/tags`
+
+**Description:** Add tags/interests to user profile. Tags are reusable across users.
+
+**Headers:**
+```
+Authorization: Bearer <JWT_TOKEN>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "tags": ["#vegan", "#geek", "#travel", "photography"]
+}
+```
+
+**Field Validation:**
+- `tags`: Array of strings (required)
+- Tags are automatically normalized:
+  - `#` prefix added if missing
+  - Converted to lowercase
+  - Maximum length: 50 characters
+  - Duplicates are removed
+
+**Success Response (201 Created):**
+```json
+{
+  "message": "Successfully added 3 tag(s)",
+  "added_tags": [
+    {
+      "id": 1,
+      "tag_name": "#vegan"
+    },
+    {
+      "id": 2,
+      "tag_name": "#geek"
+    },
+    {
+      "id": 3,
+      "tag_name": "#travel"
+    }
+  ]
+}
+```
+
+**Success Response - With Skipped Tags (201 Created):**
+```json
+{
+  "message": "Successfully added 2 tag(s), 1 already exist",
+  "added_tags": [
+    {
+      "id": 2,
+      "tag_name": "#geek"
+    },
+    {
+      "id": 3,
+      "tag_name": "#travel"
+    }
+  ],
+  "skipped_tags": ["#vegan"]
+}
+```
+
+**Error Responses:**
+
+**400 Bad Request - Missing Tags:**
+```json
+{
+  "error": "Tags array is required"
+}
+```
+
+**400 Bad Request - Invalid Format:**
+```json
+{
+  "error": "Tags must be an array"
+}
+```
+
+**400 Bad Request - Empty Array:**
+```json
+{
+  "error": "Tags array cannot be empty"
+}
+```
+
+**400 Bad Request - Tag Too Long:**
+```json
+{
+  "error": "Tag \"#verylongtagname...\" exceeds maximum length of 50 characters"
+}
+```
+
+**401 Unauthorized:**
+```json
+{
+  "error": "Token is missing"
+}
+```
+
+**500 Internal Server Error:**
+```json
+{
+  "error": "Failed to add tags: [error details]"
+}
+```
+
+**Frontend Usage (JavaScript/React):**
+```javascript
+const addTags = async (tags) => {
+  const token = localStorage.getItem('token');
+  
+  try {
+    const response = await fetch('http://localhost:5000/api/tags', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ tags })
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      console.log('Tags added:', data.message);
+      return { success: true, addedTags: data.added_tags, skippedTags: data.skipped_tags };
+    } else {
+      console.error('Add tags failed:', data.error);
+      return { success: false, error: data.error };
+    }
+  } catch (error) {
+    console.error('Network error:', error);
+    return { success: false, error: 'Network error occurred' };
+  }
+};
+```
+
+**Frontend Usage (Axios):**
+```javascript
+import axios from 'axios';
+
+const addTags = async (tags) => {
+  try {
+    const response = await axios.post('http://localhost:5000/api/tags', 
+      { tags },
+      {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      }
+    );
+    
+    return { 
+      success: true, 
+      addedTags: response.data.added_tags,
+      skippedTags: response.data.skipped_tags 
+    };
+  } catch (error) {
+    if (error.response) {
+      return { success: false, error: error.response.data.error };
+    } else {
+      return { success: false, error: 'Network error occurred' };
+    }
+  }
+};
+```
+
+**React Component Example:**
+```javascript
+import { useState } from 'react';
+
+const TagsManager = () => {
+  const [tagInput, setTagInput] = useState('');
+  const [tags, setTags] = useState([]);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const handleAddTag = () => {
+    if (!tagInput.trim()) return;
+    
+    const newTags = tagInput.split(',').map(t => t.trim()).filter(t => t);
+    setTags([...tags, ...newTags]);
+    setTagInput('');
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setMessage('');
+
+    if (tags.length === 0) {
+      setError('Please add at least one tag');
+      return;
+    }
+
+    const result = await addTags(tags);
+    
+    if (result.success) {
+      setMessage(`Added ${result.addedTags.length} tag(s)`);
+      if (result.skippedTags && result.skippedTags.length > 0) {
+        setMessage(prev => prev + ` (${result.skippedTags.length} already existed)`);
+      }
+      setTags([]);
+    } else {
+      setError(result.error);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input
+        type="text"
+        value={tagInput}
+        onChange={(e) => setTagInput(e.target.value)}
+        placeholder="Enter tags (comma-separated)"
+      />
+      <button type="button" onClick={handleAddTag}>Add to List</button>
+      
+      <div className="tags-preview">
+        {tags.map((tag, index) => (
+          <span key={index} className="tag">
+            {tag}
+            <button onClick={() => setTags(tags.filter((_, i) => i !== index))}>×</button>
+          </span>
+        ))}
+      </div>
+      
+      {message && <div className="success">{message}</div>}
+      {error && <div className="error">{error}</div>}
+      <button type="submit" disabled={tags.length === 0}>
+        Save Tags
+      </button>
+    </form>
+  );
+};
+```
+
+---
+
+### 7. Remove Tag from Profile
+
+**Endpoint:** `DELETE /api/tags/<tag_id>`
+
+**Description:** Remove a tag from user profile. Does not delete the tag from the tags table (tags are reusable).
+
+**Headers:**
+```
+Authorization: Bearer <JWT_TOKEN>
+```
+
+**URL Parameters:**
+- `tag_id` (integer, required): Tag ID to remove (obtain from GET /api/profile/me)
+
+**Success Response (200 OK):**
+```json
+{
+  "message": "Tag removed successfully",
+  "removed_tag": {
+    "id": 5,
+    "tag_name": "#vegan"
+  }
+}
+```
+
+**Error Responses:**
+
+**401 Unauthorized:**
+```json
+{
+  "error": "Token is missing"
+}
+```
+
+**404 Not Found:**
+```json
+{
+  "error": "Tag not found in your profile"
+}
+```
+
+**500 Internal Server Error:**
+```json
+{
+  "error": "Failed to remove tag: [error details]"
+}
+```
+
+**Frontend Usage (JavaScript/React):**
+```javascript
+const removeTag = async (tagId) => {
+  const token = localStorage.getItem('token');
+  
+  try {
+    const response = await fetch(`http://localhost:5000/api/tags/${tagId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      console.log('Tag removed:', data.message);
+      return { success: true, removedTag: data.removed_tag };
+    } else {
+      console.error('Remove tag failed:', data.error);
+      return { success: false, error: data.error };
+    }
+  } catch (error) {
+    console.error('Network error:', error);
+    return { success: false, error: 'Network error occurred' };
+  }
+};
+```
+
+**Frontend Usage (Axios):**
+```javascript
+import axios from 'axios';
+
+const removeTag = async (tagId) => {
+  try {
+    const response = await axios.delete(`http://localhost:5000/api/tags/${tagId}`, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      }
+    });
+    
+    return { success: true, removedTag: response.data.removed_tag };
+  } catch (error) {
+    if (error.response) {
+      return { success: false, error: error.response.data.error };
+    } else {
+      return { success: false, error: 'Network error occurred' };
+    }
+  }
+};
+```
+
+**React Component Example:**
+```javascript
+const TagsList = ({ tags, onTagRemoved }) => {
+  const [removing, setRemoving] = useState(null);
+
+  const handleRemove = async (tagId) => {
+    setRemoving(tagId);
+    const result = await removeTag(tagId);
+    setRemoving(null);
+    
+    if (result.success) {
+      onTagRemoved(tagId);
+    } else {
+      alert(result.error);
+    }
+  };
+
+  return (
+    <div className="tags-list">
+      {tags.map(tag => (
+        <span key={tag.id} className="tag">
+          {tag.tag_name}
+          <button 
+            onClick={() => handleRemove(tag.id)}
+            disabled={removing === tag.id}
+          >
+            {removing === tag.id ? '...' : '×'}
+          </button>
+        </span>
+      ))}
+    </div>
+  );
+};
+```
+
+---
+
+## Tags Endpoints
+
+### 1. Get All Tags
+
+**Endpoint:** `GET /api/tags`
+
+**Description:** Get all available tags in the system. Supports optional search/filtering by tag name.
+
+**Headers:**
+```
+None required (public endpoint)
+```
+
+**Query Parameters:**
+- `q` (string, optional): Search query to filter tags by name (case-insensitive, partial match)
+
+**Success Response (200 OK) - All Tags:**
+```json
+{
+  "tags": [
+    {
+      "id": 1,
+      "tag_name": "#geek",
+      "created_at": "2025-11-24T10:00:00"
+    },
+    {
+      "id": 2,
+      "tag_name": "#travel",
+      "created_at": "2025-11-24T11:00:00"
+    },
+    {
+      "id": 3,
+      "tag_name": "#vegan",
+      "created_at": "2025-11-24T12:00:00"
+    }
+  ],
+  "count": 3
+}
+```
+
+**Success Response (200 OK) - With Search:**
+```json
+{
+  "tags": [
+    {
+      "id": 1,
+      "tag_name": "#geek",
+      "created_at": "2025-11-24T10:00:00"
+    }
+  ],
+  "count": 1
+}
+```
+
+**Success Response (200 OK) - No Tags:**
+```json
+{
+  "tags": [],
+  "count": 0
+}
+```
+
+**Error Responses:**
+
+**500 Internal Server Error:**
+```json
+{
+  "error": "Failed to get tags: [error details]"
+}
+```
+
+**Frontend Usage (JavaScript/React):**
+```javascript
+const getTags = async (searchQuery = '') => {
+  try {
+    const url = searchQuery 
+      ? `http://localhost:5000/api/tags?q=${encodeURIComponent(searchQuery)}`
+      : 'http://localhost:5000/api/tags';
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      return { success: true, tags: data.tags, count: data.count };
+    } else {
+      console.error('Failed to get tags:', data.error);
+      return { success: false, error: data.error };
+    }
+  } catch (error) {
+    console.error('Network error:', error);
+    return { success: false, error: 'Network error occurred' };
+  }
+};
+```
+
+**Frontend Usage (Axios):**
+```javascript
+import axios from 'axios';
+
+const getTags = async (searchQuery = '') => {
+  try {
+    const params = searchQuery ? { q: searchQuery } : {};
+    const response = await axios.get('http://localhost:5000/api/tags', { params });
+    
+    return { success: true, tags: response.data.tags, count: response.data.count };
+  } catch (error) {
+    if (error.response) {
+      return { success: false, error: error.response.data.error };
+    } else {
+      return { success: false, error: 'Network error occurred' };
+    }
+  }
+};
+```
+
+**React Component Example - Tag Search/Filter:**
+```javascript
+import { useState, useEffect } from 'react';
+
+const TagSelector = ({ onTagSelect }) => {
+  const [tags, setTags] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchTags = async () => {
+      setLoading(true);
+      const result = await getTags(searchQuery);
+      setLoading(false);
+      
+      if (result.success) {
+        setTags(result.tags);
+      }
+    };
+
+    // Debounce search
+    const timeoutId = setTimeout(() => {
+      fetchTags();
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery]);
+
+  return (
+    <div className="tag-selector">
+      <input
+        type="text"
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        placeholder="Search tags..."
+      />
+      
+      {loading && <div>Loading...</div>}
+      
+      <div className="tags-list">
+        {tags.map(tag => (
+          <button
+            key={tag.id}
+            onClick={() => onTagSelect(tag)}
+            className="tag-button"
+          >
+            {tag.tag_name}
+          </button>
+        ))}
+      </div>
+      
+      {tags.length === 0 && !loading && (
+        <div>No tags found</div>
+      )}
+    </div>
+  );
+};
+```
+
+**React Hook Example:**
+```javascript
+import { useState, useEffect } from 'react';
+
+const useTags = (searchQuery = '') => {
+  const [tags, setTags] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchTags = async () => {
+      setLoading(true);
+      setError(null);
+      
+      const result = await getTags(searchQuery);
+      
+      if (result.success) {
+        setTags(result.tags);
+      } else {
+        setError(result.error);
+      }
+      
+      setLoading(false);
+    };
+
+    fetchTags();
+  }, [searchQuery]);
+
+  return { tags, loading, error };
+};
+```
+
+---
+
 ## Error Handling Guide
 
 ### HTTP Status Codes
@@ -1840,6 +2808,46 @@ curl -X PUT http://localhost:5000/api/profile/location \
   -d '{}'
 ```
 
+**Upload Profile Images:**
+```bash
+curl -X POST http://localhost:5000/api/profile/upload \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN_HERE" \
+  -F "file=@/path/to/image1.jpg" \
+  -F "file=@/path/to/image2.png"
+```
+
+**Delete Profile Image:**
+```bash
+curl -X DELETE http://localhost:5000/api/profile/images/123 \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN_HERE"
+```
+
+**Add Tags:**
+```bash
+curl -X POST http://localhost:5000/api/tags \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN_HERE" \
+  -d '{
+    "tags": ["#vegan", "#geek", "#travel"]
+  }'
+```
+
+**Remove Tag:**
+```bash
+curl -X DELETE http://localhost:5000/api/tags/5 \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN_HERE"
+```
+
+**Get Tags:**
+```bash
+curl -X GET http://localhost:5000/api/tags
+```
+
+**Search Tags:**
+```bash
+curl -X GET "http://localhost:5000/api/tags?q=vegan"
+```
+
 ### Postman Collection
 
 **Register Request:**
@@ -1950,6 +2958,42 @@ curl -X PUT http://localhost:5000/api/profile/location \
   - `Authorization: Bearer {token}`
 - Body: Empty JSON `{}` or omit
 
+**Upload Profile Images Request:**
+- Method: `POST`
+- URL: `http://localhost:5000/api/profile/upload`
+- Headers: `Authorization: Bearer {token}`
+- Body (form-data):
+  - Key: `file` (File type)
+  - Value: Select image file(s) - can select multiple files
+- Note: In Postman, you can add multiple `file` keys to upload multiple images at once
+
+**Delete Profile Image Request:**
+- Method: `DELETE`
+- URL: `http://localhost:5000/api/profile/images/{image_id}`
+- Headers: `Authorization: Bearer {token}`
+- Replace `{image_id}` with actual image ID (integer)
+- Body: None required
+
+**Add Tags Request:**
+- Method: `POST`
+- URL: `http://localhost:5000/api/tags`
+- Headers:
+  - `Content-Type: application/json`
+  - `Authorization: Bearer {token}`
+- Body (raw JSON):
+```json
+{
+  "tags": ["#vegan", "#geek", "#travel"]
+}
+```
+
+**Remove Tag Request:**
+- Method: `DELETE`
+- URL: `http://localhost:5000/api/tags/{tag_id}`
+- Headers: `Authorization: Bearer {token}`
+- Replace `{tag_id}` with actual tag ID (integer)
+- Body: None required
+
 **Postman Environment Variables:**
 Create a Postman environment with:
 - `base_url`: `http://localhost:5000`
@@ -1978,7 +3022,7 @@ pm.environment.set("token", pm.response.json().token);
    - Password reset tokens expire after 1 hour
    - JWT tokens expire after 24 hours (configurable via `JWT_EXPIRATION_HOURS`)
 
-4. **Password Requirements:** Minimum 8 characters (dictionary word check not implemented yet).
+4. **Password Requirements:** Minimum 8 characters. Cannot contain common dictionary words.
 
 5. **Authentication:** After login, include JWT token in `Authorization: Bearer <token>` header for protected routes.
 
@@ -2014,5 +3058,26 @@ pm.environment.set("token", pm.response.json().token);
     - For testing through Docker, client can send public IP in `X-Client-Public-IP` header
     - Location is stored as `latitude` and `longitude` in users table
 
-11. **Base URL:** Change `localhost:5000` to your production domain when deploying.
+11. **Image Management:**
+    - Users can upload up to 5 images maximum
+    - Supported formats: JPG, JPEG, PNG, GIF, WEBP
+    - Maximum file size: 5MB per image
+    - Images are stored with UUID filenames in `static/uploads/user_{user_id}/` directory
+    - Delete images before uploading new ones if limit is reached
+    - Images are permanently deleted from both database and disk when removed
+
+12. **Tags Management:**
+    - Tags are reusable across users (stored in shared `tags` table)
+    - Tags are automatically normalized (lowercase, `#` prefix added)
+    - Maximum tag length: 50 characters
+    - Removing a tag from profile does not delete it from the system (other users may still have it)
+    - Tags are linked to users via `user_tags` table (many-to-many relationship)
+    - Duplicate tags are automatically skipped
+
+13. **Password Requirements:**
+    - Minimum 8 characters
+    - Cannot contain common dictionary words (50 most common passwords/English words)
+    - Dictionary validation applies to both registration and password reset
+
+14. **Base URL:** Change `localhost:5000` to your production domain when deploying.
 
