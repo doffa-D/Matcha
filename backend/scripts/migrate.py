@@ -1,122 +1,176 @@
 #!/usr/bin/env python3
-"""Database migration script"""
+"""
+Database migration script
+Automatically applies schema.sql and any pending migrations in schema/migrations/
+"""
 import os
 import sys
-import subprocess
+import time
+
+# Force UTF-8 output for Windows
+if sys.platform == 'win32':
+    sys.stdout.reconfigure(encoding='utf-8')
+
 import psycopg2
+import psycopg2.extras
 from pathlib import Path
 from dotenv import load_dotenv
 
 # Load environment variables
-env_path = Path(__file__).parent.parent / 'backend' / '.env'
+BACKEND_DIR = Path(__file__).parent.parent / 'backend'
+# Adjust path if script is run from root or backend
+if not BACKEND_DIR.exists():
+    BACKEND_DIR = Path(__file__).parent.parent / 'app' # Try inside container path?
+    # Actually, based on project structure:
+    # root/backend/scripts/migrate.py
+    # root/backend/.env
+    BACKEND_DIR = Path(__file__).resolve().parent.parent
+
+env_path = BACKEND_DIR / '.env'
 load_dotenv(env_path)
 
-def check_docker_running():
-    """Check if Docker containers are running"""
-    try:
-        result = subprocess.run(
-            ['docker', 'ps', '--filter', 'name=matcha_postgres', '--format', '{{.Names}}'],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        return 'matcha_postgres' in result.stdout
-    except:
-        return False
+def get_db_config():
+    """Get database configuration with host adjustment for local run"""
+    db_host = os.getenv('DB_HOST', 'localhost')
+    # If running locally but env says postgres (container name), switch to localhost
+    if db_host == 'postgres':
+         # Simple heuristic: check if we can resolve 'postgres'. 
+         # If not (which is likely on host), use 'localhost'.
+         # For now, just defaulting to localhost when 'postgres' is seen on host environment
+         # is the safest bet for the Makefile usage.
+         db_host = 'localhost'
+    
+    return {
+        'host': db_host,
+        'port': os.getenv('DB_PORT', '5432'),
+        'database': os.getenv('DB_NAME', 'matcha'),
+        'user': os.getenv('DB_USER', 'postgres'),
+        'password': os.getenv('DB_PASSWORD', 'postgres')
+    }
 
-def get_container_env(var_name):
-    """Get environment variable from PostgreSQL container"""
-    try:
-        result = subprocess.run(
-            ['docker-compose', 'exec', '-T', 'postgres', 'printenv', var_name],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        return result.stdout.strip()
-    except:
-        return None
+def wait_for_db(config, retries=30, delay=2):
+    """Wait for database to be ready"""
+    print(f"Waiting for database at {config['host']}:{config['port']}...")
+    for i in range(retries):
+        try:
+            conn = psycopg2.connect(**config)
+            conn.close()
+            print("✅ Database is ready!")
+            return True
+        except psycopg2.OperationalError:
+            if i == retries - 1:
+                print("❌ Could not connect to database after multiple retries.")
+                return False
+            print(f"   Database not ready yet, retrying in {delay}s... ({i+1}/{retries})")
+            time.sleep(delay)
+    return False
+
+def init_migration_table(cursor):
+    """Create schema_migrations table if not exists"""
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+            id SERIAL PRIMARY KEY,
+            migration VARCHAR(255) NOT NULL UNIQUE,
+            applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+
+def is_migration_applied(cursor, migration_name):
+    """Check if a migration has been applied"""
+    cursor.execute("SELECT id FROM schema_migrations WHERE migration = %s", (migration_name,))
+    return cursor.fetchone() is not None
+
+def record_migration(cursor, migration_name):
+    """Record a migration as applied"""
+    cursor.execute("INSERT INTO schema_migrations (migration) VALUES (%s)", (migration_name,))
+
+def run_sql_file(cursor, filepath):
+    """Read and execute a SQL file"""
+    print(f"   Executing {filepath.name}...")
+    with open(filepath, 'r') as f:
+        sql = f.read()
+    if sql.strip():
+        cursor.execute(sql)
 
 def migrate():
-    """Run schema.sql migration"""
-    # Check if Docker containers are running
-    if not check_docker_running():
-        print("❌ Docker containers are not running!")
-        print("Please run: make up")
-        sys.exit(1)
+    config = get_db_config()
     
+    # Check password
+    if not config['password']:
+        print("❌ Database password not set in environment!")
+        sys.exit(1)
+
+    if not wait_for_db(config):
+        sys.exit(1)
+
+    conn = None
     try:
-        # Get credentials from container (more reliable than .env)
-        db_user = get_container_env('POSTGRES_USER') or os.getenv('DB_USER')
-        db_password = get_container_env('POSTGRES_PASSWORD') or os.getenv('DB_PASSWORD')
-        db_name = get_container_env('POSTGRES_DB') or os.getenv('DB_NAME')
-        
-        if not db_password:
-            print("❌ Could not retrieve database password!")
-            print("Trying to get from container environment...")
-            sys.exit(1)
-        
-        # Connect to database (use localhost when running from host)
-        db_host = os.getenv('DB_HOST', 'localhost')
-        if db_host == 'postgres':
-            db_host = 'localhost'
-        
-        db_port = os.getenv('DB_PORT', '5432')
-        
-        print(f"Connecting to database at {db_host}:{db_port}...")
-        print(f"Database: {db_name}, User: {db_user}, Password: {'*' * len(db_password) if db_password else 'NOT SET'}")
-        
-        conn = psycopg2.connect(
-            host=db_host,
-            port=db_port,
-            database=db_name,
-            user=db_user,
-            password=db_password
-        )
-        
-        # Read schema file
-        schema_path = Path(__file__).parent.parent / 'backend' / 'schema' / 'schema.sql'
-        with open(schema_path, 'r') as f:
-            schema_sql = f.read()
-        
-        # Execute schema
+        conn = psycopg2.connect(**config)
+        conn.autocommit = False 
         cursor = conn.cursor()
-        
-        # Check if tables already exist
-        cursor.execute("""
-            SELECT table_name 
-            FROM information_schema.tables 
-            WHERE table_schema = 'public' 
-            AND table_name IN ('users', 'tokens')
-        """)
-        existing_tables = [row[0] for row in cursor.fetchall()]
-        
-        if existing_tables:
-            print(f"⚠️  Tables already exist: {', '.join(existing_tables)}")
-            print("Skipping migration. Tables are already created.")
-            cursor.close()
-            conn.close()
-            return
-        
-        # Execute schema
-        cursor.execute(schema_sql)
+
+        # 1. Initialize migration tracking
+        init_migration_table(cursor)
         conn.commit()
         
-        print("✅ Migration successful!")
-        cursor.close()
-        conn.close()
+        # 2. Check if we need to run the base schema.sql
+        schema_path = BACKEND_DIR / 'schema' / 'schema.sql'
+        BASE_MIGRATION_NAME = '000_initial_schema.sql'
         
-    except psycopg2.OperationalError as e:
-        print(f"❌ Database connection failed: {e}")
-        print("\nTroubleshooting:")
-        print("1. Check your backend/.env file matches container credentials")
-        print("2. Container uses: POSTGRES_USER and POSTGRES_PASSWORD from docker-compose")
-        print("3. Update backend/.env to match, or reset database: make down && make up")
-        sys.exit(1)
+        # Check if users table exists (legacy check)
+        cursor.execute("SELECT to_regclass('public.users')")
+        users_exists = cursor.fetchone()[0] is not None
+
+        if not is_migration_applied(cursor, BASE_MIGRATION_NAME):
+            if users_exists:
+                print(f"⚠️  'users' table exists but migration '{BASE_MIGRATION_NAME}' not recorded.")
+                print(f"   Marking '{BASE_MIGRATION_NAME}' as applied without running.")
+                record_migration(cursor, BASE_MIGRATION_NAME)
+                conn.commit()
+            elif schema_path.exists():
+                print(f"Applying base schema: {BASE_MIGRATION_NAME}")
+                try:
+                    run_sql_file(cursor, schema_path)
+                    record_migration(cursor, BASE_MIGRATION_NAME)
+                    conn.commit()
+                    print(f"✅ Applied {BASE_MIGRATION_NAME}")
+                except Exception as e:
+                    conn.rollback()
+                    print(f"❌ Failed to apply {BASE_MIGRATION_NAME}: {e}")
+                    sys.exit(1)
+            else:
+                print("❌ schema.sql not found!")
+                sys.exit(1)
+        
+        # 3. Apply pending migrations
+        migrations_dir = BACKEND_DIR / 'schema' / 'migrations'
+        if migrations_dir.exists():
+            migration_files = sorted([f for f in migrations_dir.iterdir() if f.suffix == '.sql'])
+            
+            for migration_file in migration_files:
+                migration_name = migration_file.name
+                if not is_migration_applied(cursor, migration_name):
+                    print(f"Applying migration: {migration_name}")
+                    try:
+                        run_sql_file(cursor, migration_file)
+                        record_migration(cursor, migration_name)
+                        conn.commit()
+                        print(f"✅ Applied {migration_name}")
+                    except Exception as e:
+                        conn.rollback()
+                        print(f"❌ Failed to apply {migration_name}: {e}")
+                        sys.exit(1)
+        
+        print("✅ Schema is up to date.")
+
     except Exception as e:
-        print(f"❌ Migration failed: {e}")
+        if conn:
+            conn.rollback()
+        print(f"❌ Migration script failed: {e}")
         sys.exit(1)
+    finally:
+        if conn:
+            conn.close()
 
 if __name__ == '__main__':
     migrate()
-

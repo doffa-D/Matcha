@@ -29,10 +29,6 @@ services:
       - backend/.env
     environment:
       DB_HOST: postgres
-      FLASK_ENV: development
-      FLASK_DEBUG: "1"
-      FLASK_APP: app:create_app
-      WERKZEUG_RELOADER_TYPE: stat
     ports:
       - "5000:5000"
     volumes:

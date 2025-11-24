@@ -23,6 +23,7 @@ class Config:
     EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True").lower() == "true"
     EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "False").lower() == "true"
     VERIFICATION_URL = os.getenv("VERIFICATION_URL")
+    PASSWORD_RESET_URL = os.getenv("PASSWORD_RESET_URL")
     
 class DevelopmentConfig(Config):
     DEBUG = True

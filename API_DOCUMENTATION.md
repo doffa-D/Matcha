@@ -40,8 +40,7 @@ Content-Type: application/json
 **Success Response (201 Created):**
 ```json
 {
-  "message": "Registration successful. Please verify your email.",
-  "verification_token": "dBoe8_AeLlmmzLPK0tgWC87uJ..."
+  "message": "Registration successful. Please verify your email."
 }
 ```
 
@@ -523,6 +522,557 @@ axios.interceptors.request.use(config => {
 
 ---
 
+### 4. Forgot Password
+
+**Endpoint:** `POST /api/auth/forgot-password`
+
+**Description:** Request a password reset link via email. Generates a password reset token and sends it to the user's email.
+
+**Headers:**
+```
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+**Field Validation:**
+- `email`: Valid email format (required)
+
+**Success Response (200 OK) - Email Exists:**
+```json
+{
+  "message": "Please check your email for password reset instructions."
+}
+```
+
+**Error Responses:**
+
+**400 Bad Request - Missing Email:**
+```json
+{
+  "error": "Email required"
+}
+```
+
+**400 Bad Request - Invalid Email Format:**
+```json
+{
+  "error": "Invalid email format"
+}
+```
+
+**404 Not Found - Email Not Registered:**
+```json
+{
+  "error": "Please use an email address that is registered with us."
+}
+```
+
+**500 Internal Server Error:**
+```json
+{
+  "error": "Request failed: [error details]"
+}
+```
+
+**Frontend Usage (JavaScript/React):**
+```javascript
+const forgotPassword = async (email) => {
+  try {
+    const response = await fetch('http://localhost:5000/api/auth/forgot-password', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: email
+      })
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      // Show success message
+      console.log('Reset link sent:', data.message);
+      return { success: true, message: data.message };
+    } else {
+      // Show error message
+      console.error('Request failed:', data.error);
+      return { success: false, error: data.error };
+    }
+  } catch (error) {
+    console.error('Network error:', error);
+    return { success: false, error: 'Network error occurred' };
+  }
+};
+```
+
+**Frontend Usage (Axios):**
+```javascript
+import axios from 'axios';
+
+const forgotPassword = async (email) => {
+  try {
+    const response = await axios.post('http://localhost:5000/api/auth/forgot-password', {
+      email: email
+    });
+    
+    console.log('Reset link sent:', response.data.message);
+    return { success: true, message: response.data.message };
+  } catch (error) {
+    if (error.response) {
+      console.error('Request failed:', error.response.data.error);
+      return { success: false, error: error.response.data.error };
+    } else {
+      console.error('Network error:', error.message);
+      return { success: false, error: 'Network error occurred' };
+    }
+  }
+};
+```
+
+**React Component Example:**
+```javascript
+import { useState } from 'react';
+
+const ForgotPasswordForm = () => {
+  const [email, setEmail] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setMessage('');
+
+    const result = await forgotPassword(email);
+    
+    if (result.success) {
+      setMessage(result.message);
+    } else {
+      setError(result.error);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="Enter your email"
+        required
+      />
+      {message && <div className="success">{message}</div>}
+      {error && <div className="error">{error}</div>}
+      <button type="submit">Send Reset Link</button>
+    </form>
+  );
+};
+```
+
+---
+
+### 5. Reset Password
+
+**Endpoint:** `POST /api/auth/reset-password/<token>`
+
+**Description:** Reset user password using the token received via email from forgot-password request.
+
+**URL Parameters:**
+- `token` (string, required): Password reset token from email
+
+**Headers:**
+```
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "password": "newpassword123"
+}
+```
+
+**Field Validation:**
+- `password`: Minimum 8 characters (required)
+
+**Success Response (200 OK):**
+```json
+{
+  "message": "Password reset successfully. You can now login with your new password."
+}
+```
+
+**Error Responses:**
+
+**400 Bad Request - Missing Password:**
+```json
+{
+  "error": "Password required"
+}
+```
+
+**400 Bad Request - Password Too Short:**
+```json
+{
+  "error": "Password must be at least 8 characters"
+}
+```
+
+**400 Bad Request - Invalid Token:**
+```json
+{
+  "error": "Invalid or expired reset token"
+}
+```
+
+**400 Bad Request - Expired Token:**
+```json
+{
+  "error": "Reset token has expired"
+}
+```
+
+**500 Internal Server Error:**
+```json
+{
+  "error": "Password reset failed: [error details]"
+}
+```
+
+**Frontend Usage (JavaScript/React):**
+```javascript
+const resetPassword = async (token, newPassword) => {
+  try {
+    const response = await fetch(`http://localhost:5000/api/auth/reset-password/${token}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        password: newPassword
+      })
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      // Show success message
+      console.log('Password reset:', data.message);
+      // Redirect to login page
+      return { success: true, message: data.message };
+    } else {
+      // Show error message
+      console.error('Reset failed:', data.error);
+      return { success: false, error: data.error };
+    }
+  } catch (error) {
+    console.error('Network error:', error);
+    return { success: false, error: 'Network error occurred' };
+  }
+};
+```
+
+**Frontend Usage (Axios):**
+```javascript
+import axios from 'axios';
+
+const resetPassword = async (token, newPassword) => {
+  try {
+    const response = await axios.post(`http://localhost:5000/api/auth/reset-password/${token}`, {
+      password: newPassword
+    });
+    
+    console.log('Password reset:', response.data.message);
+    return { success: true, message: response.data.message };
+  } catch (error) {
+    if (error.response) {
+      console.error('Reset failed:', error.response.data.error);
+      return { success: false, error: error.response.data.error };
+    } else {
+      console.error('Network error:', error.message);
+      return { success: false, error: 'Network error occurred' };
+    }
+  }
+};
+```
+
+**React Component Example:**
+```javascript
+import { useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+
+const ResetPasswordPage = () => {
+  const { token } = useParams();
+  const navigate = useNavigate();
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setMessage('');
+
+    // Validate passwords match
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    const result = await resetPassword(token, password);
+    
+    if (result.success) {
+      setMessage(result.message);
+      setTimeout(() => navigate('/login'), 3000);
+    } else {
+      setError(result.error);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder="New Password"
+        required
+        minLength={8}
+      />
+      <input
+        type="password"
+        value={confirmPassword}
+        onChange={(e) => setConfirmPassword(e.target.value)}
+        placeholder="Confirm Password"
+        required
+        minLength={8}
+      />
+      {message && <div className="success">{message}</div>}
+      {error && <div className="error">{error}</div>}
+      <button type="submit">Reset Password</button>
+    </form>
+  );
+};
+```
+
+**React Router Example:**
+```javascript
+// App.js or Router setup
+<Route path="/reset-password/:token" component={ResetPasswordPage} />
+```
+
+---
+
+### 6. Logout User
+
+**Endpoint:** `POST /api/auth/logout`
+
+**Description:** Logout user by blacklisting their JWT token. After logout, the token cannot be used for authenticated requests.
+
+**Headers:**
+```
+Authorization: Bearer <JWT_TOKEN>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{}
+```
+(Empty body is acceptable, or can be omitted if not strictly required by Flask)
+
+**Success Response (200 OK):**
+```json
+{
+  "message": "Logged out successfully"
+}
+```
+
+**Success Response - Already Logged Out (200 OK):**
+```json
+{
+  "message": "Already logged out"
+}
+```
+
+**Error Responses:**
+
+**401 Unauthorized - Missing Token:**
+```json
+{
+  "error": "Token is missing"
+}
+```
+
+**401 Unauthorized - Invalid Token Format:**
+```json
+{
+  "error": "Invalid token format"
+}
+```
+
+**401 Unauthorized - Invalid/Expired Token:**
+```json
+{
+  "error": "Token is invalid, expired, or blacklisted"
+}
+```
+
+**500 Internal Server Error:**
+```json
+{
+  "error": "Logout failed: [error details]"
+}
+```
+
+**Frontend Usage (JavaScript/React):**
+```javascript
+const logoutUser = async () => {
+  const token = localStorage.getItem('token');
+  
+  try {
+    const response = await fetch('http://localhost:5000/api/auth/logout', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({}) // Empty body or omit
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      // Remove token and user data from storage
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      
+      // Clear Authorization header if using axios
+      // delete axios.defaults.headers.common['Authorization'];
+      
+      console.log('Logged out:', data.message);
+      return { success: true, message: data.message };
+    } else {
+      console.error('Logout failed:', data.error);
+      // Still clear local storage even on error
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      return { success: false, error: data.error };
+    }
+  } catch (error) {
+    console.error('Network error:', error);
+    // Still clear local storage on network error
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    return { success: false, error: 'Network error occurred' };
+  }
+};
+```
+
+**Frontend Usage (Axios):**
+```javascript
+import axios from 'axios';
+
+const logoutUser = async () => {
+  try {
+    const response = await axios.post('http://localhost:5000/api/auth/logout', {}, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      }
+    });
+    
+    // Remove token and user data
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    
+    // Clear Authorization header
+    delete axios.defaults.headers.common['Authorization'];
+    
+    console.log('Logged out:', response.data.message);
+    return { success: true, message: response.data.message };
+  } catch (error) {
+    if (error.response) {
+      console.error('Logout failed:', error.response.data.error);
+      // Still clear local storage even on error
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      delete axios.defaults.headers.common['Authorization'];
+      return { success: false, error: error.response.data.error };
+    } else {
+      console.error('Network error:', error.message);
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      delete axios.defaults.headers.common['Authorization'];
+      return { success: false, error: 'Network error occurred' };
+    }
+  }
+};
+```
+
+**React Hook Example:**
+```javascript
+import { useNavigate } from 'react-router-dom';
+
+const useLogout = () => {
+  const navigate = useNavigate();
+
+  const logout = async () => {
+    const result = await logoutUser();
+    
+    if (result.success) {
+      // Redirect to login page
+      navigate('/login');
+    } else {
+      // Still redirect even if API call failed
+      // Token is cleared from storage anyway
+      navigate('/login');
+    }
+  };
+
+  return { logout };
+};
+
+// Usage in component
+const Header = () => {
+  const { logout } = useLogout();
+
+  return (
+    <header>
+      <button onClick={logout}>Logout</button>
+    </header>
+  );
+};
+```
+
+**Axios Interceptor for Auto-Logout:**
+```javascript
+// Add response interceptor to handle 401 (unauthorized) errors
+axios.interceptors.response.use(
+  response => response,
+  error => {
+    if (error.response && error.response.status === 401) {
+      // Token is invalid or expired, logout user
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      delete axios.defaults.headers.common['Authorization'];
+      // Redirect to login
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+```
+
+---
+
 ## Error Handling Guide
 
 ### HTTP Status Codes
@@ -532,6 +1082,7 @@ axios.interceptors.request.use(config => {
 - **400 Bad Request**: Invalid input/validation error
 - **401 Unauthorized**: Authentication required or invalid credentials
 - **403 Forbidden**: Account not verified or access denied
+- **404 Not Found**: Resource not found (e.g., email not registered)
 - **409 Conflict**: Resource already exists
 - **500 Internal Server Error**: Server error
 
@@ -615,6 +1166,31 @@ curl -X GET http://localhost:5000/api/protected-endpoint \
   -H "Authorization: Bearer $TOKEN"
 ```
 
+**Forgot Password:**
+```bash
+curl -X POST http://localhost:5000/api/auth/forgot-password \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com"
+  }'
+```
+
+**Reset Password:**
+```bash
+curl -X POST http://localhost:5000/api/auth/reset-password/YOUR_TOKEN_HERE \
+  -H "Content-Type: application/json" \
+  -d '{
+    "password": "newpassword123"
+  }'
+```
+
+**Logout:**
+```bash
+curl -X POST http://localhost:5000/api/auth/logout \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN_HERE"
+```
+
 ### Postman Collection
 
 **Register Request:**
@@ -649,6 +1225,38 @@ curl -X GET http://localhost:5000/api/protected-endpoint \
 }
 ```
 
+**Forgot Password Request:**
+- Method: `POST`
+- URL: `http://localhost:5000/api/auth/forgot-password`
+- Headers: `Content-Type: application/json`
+- Body (raw JSON):
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+**Reset Password Request:**
+- Method: `POST`
+- URL: `http://localhost:5000/api/auth/reset-password/{token}`
+- Headers: `Content-Type: application/json`
+- Replace `{token}` with actual token from password reset email
+- Body (raw JSON):
+```json
+{
+  "password": "newpassword123"
+}
+```
+
+**Logout Request:**
+- Method: `POST`
+- URL: `http://localhost:5000/api/auth/logout`
+- Headers: 
+  - `Content-Type: application/json`
+  - `Authorization: Bearer {token}`
+- Replace `{token}` with JWT token from login response
+- Body: None required (empty JSON `{}` or omit)
+
 **Postman Environment Variables:**
 Create a Postman environment with:
 - `base_url`: `http://localhost:5000`
@@ -674,6 +1282,7 @@ pm.environment.set("token", pm.response.json().token);
 
 3. **Token Expiration:** 
    - Verification tokens expire after 24 hours
+   - Password reset tokens expire after 1 hour
    - JWT tokens expire after 24 hours (configurable via `JWT_EXPIRATION_HOURS`)
 
 4. **Password Requirements:** Minimum 8 characters (dictionary word check not implemented yet).
@@ -682,5 +1291,19 @@ pm.environment.set("token", pm.response.json().token);
 
 6. **Last Online:** User's `last_online` timestamp is updated on successful login.
 
-7. **Base URL:** Change `localhost:5000` to your production domain when deploying.
+7. **Password Reset:** 
+   - Only one active password reset token per user (old tokens are deleted when new one is created)
+   - Reset link expires after 1 hour
+   - Email must be registered to receive reset link
+   - Token is deleted after successful password reset
+   - Use reset-password endpoint with token from email to complete password change
+
+8. **Logout & Token Blacklisting:**
+   - Logout endpoint blacklists the JWT token in the database
+   - Blacklisted tokens cannot be used for authenticated requests
+   - Tokens are automatically cleaned up after expiration
+   - Frontend should remove token from localStorage on logout
+   - Use `Authorization: Bearer <token>` header for logout request
+
+9. **Base URL:** Change `localhost:5000` to your production domain when deploying.
 

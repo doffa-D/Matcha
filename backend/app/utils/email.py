@@ -46,3 +46,45 @@ def send_verification_email(email: str, token: str):
         import traceback
         traceback.print_exc()
         return False
+
+
+def send_password_reset_email(email: str, token: str):
+    """Send password reset link"""
+    reset_url = f"{Config.PASSWORD_RESET_URL}/{token}"
+    
+    msg = MIMEMultipart('alternative')
+    msg['Subject'] = "Reset your Matcha password"
+    msg['From'] = Config.EMAIL_HOST_USER
+    msg['To'] = email
+    
+    html = f"""
+    <html>
+      <body>
+        <h2>Password Reset Request</h2>
+        <p>You requested to reset your password. Click the link below to reset it:</p>
+        <a href="{reset_url}">{reset_url}</a>
+        <p>This link expires in 1 hour.</p>
+        <p>If you didn't request this, please ignore this email.</p>
+      </body>
+    </html>
+    """
+    
+    msg.attach(MIMEText(html, 'html'))
+    
+    try:
+        server = smtplib.SMTP(Config.EMAIL_HOST, Config.EMAIL_PORT)
+        
+        if Config.EMAIL_USE_TLS:
+            server.starttls()
+        
+        server.login(Config.EMAIL_HOST_USER, Config.EMAIL_HOST_PASSWORD)
+        server.send_message(msg)
+        server.quit()
+        
+        return True
+        
+    except Exception as e:
+        print(f"Email sending failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False

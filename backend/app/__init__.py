@@ -9,7 +9,9 @@ def create_app():
     
     # Register blueprints
     from app.blueprints.auth import bp as auth_bp
+    from app.blueprints.profile import bp as profile_bp
     app.register_blueprint(auth_bp)
+    app.register_blueprint(profile_bp)
     
     return app
 

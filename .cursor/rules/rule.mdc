@@ -194,7 +194,39 @@ server.send_message(msg)
 server.quit()
 ```
 
-## 6. RESPONSE GUIDELINES
+## 6. API DOCUMENTATION REQUIREMENTS
+
+**MANDATORY:** When adding or updating any API endpoint, you MUST update `API_DOCUMENTATION.md` with:
+
+1. **Endpoint Documentation:**
+   - Endpoint URL and HTTP method
+   - Description
+   - Request headers
+   - Request body/parameters (with examples)
+   - Field validation rules
+   - Success response (status code and JSON example)
+   - All error responses (status codes and JSON examples)
+
+2. **Frontend Usage Examples:**
+   - JavaScript/React fetch example
+   - Axios example
+   - React component example (if applicable)
+
+3. **Testing Examples:**
+   - cURL command
+   - Postman collection entry
+
+4. **Update Related Sections:**
+   - HTTP Status Codes section (if new status codes are used)
+   - Notes section (if token expiration, behavior changes, etc.)
+
+**Documentation Format:**
+- Follow the existing structure in `API_DOCUMENTATION.md`
+- Use consistent formatting and code blocks
+- Include all error cases
+- Provide practical, copy-paste ready examples
+
+## 7. RESPONSE GUIDELINES
 * When asked to write code, focus on the **Python Backend**
 * Always handle errors (try/except) specifically for Database errors
 * Do not hallucinate library imports. Use standard `os`, `datetime`, `math`, `secrets`
@@ -202,3 +234,4 @@ server.quit()
 * Use Flask blueprints for route organization (`@bp.route()`)
 * Return JSON responses: `jsonify({'key': 'value'})` with appropriate HTTP status codes
 * Use parameterized queries: `db.query("SELECT * FROM users WHERE id = %s", (user_id,))`
+* **After implementing any API endpoint, immediately update `API_DOCUMENTATION.md`**
