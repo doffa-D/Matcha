@@ -3,21 +3,14 @@ from datetime import datetime
 from app.db import Database
 from app.jwt import token_required
 from app.utils.password_validator import contains_dictionary_word
-import os
 import uuid
-from werkzeug.utils import secure_filename
 from pathlib import Path
+from app.utils.user_utils import calculate_age
 
 bp = Blueprint('profile', __name__, url_prefix='/api/profile')
 
 
-def calculate_age(date_of_birth):
-    """Calculate age from date_of_birth"""
-    if not date_of_birth:
-        return None
-    today = datetime.utcnow().date()
-    age = today.year - date_of_birth.year - ((today.month, today.day) < (date_of_birth.month, date_of_birth.day))
-    return age
+
 
 
 # Allowed file extensions and MIME types
@@ -87,6 +80,29 @@ def get_profile(current_user_id):
                 (current_user_id,)
             )
 
+            # Get visits (who viewed my profile)
+            visits = db.query(
+                """SELECT v.visitor_id, v.visit_count, v.timestamp,
+                          u.username, u.first_name, u.last_name
+                   FROM visits v
+                   INNER JOIN users u ON v.visitor_id = u.id
+                   WHERE v.visited_id = %s
+                   ORDER BY v.timestamp DESC
+                   LIMIT 50""",
+                (current_user_id,)
+            )
+
+            # Get likes (who liked me)
+            likes = db.query(
+                """SELECT l.liker_id, l.created_at,
+                          u.username, u.first_name, u.last_name
+                   FROM likes l
+                   INNER JOIN users u ON l.liker_id = u.id
+                   WHERE l.liked_id = %s
+                   ORDER BY l.created_at DESC""",
+                (current_user_id,)
+            )
+
             # Format response
             profile = {
                 'id': user_data['id'],
@@ -121,7 +137,32 @@ def get_profile(current_user_id):
                         'tag_name': tag['tag_name']
                     }
                     for tag in tags
-                ]
+                ],
+                'visits': [
+                    {
+                        'visitor_id': visit['visitor_id'],
+                        'username': visit['username'],
+                        'first_name': visit['first_name'],
+                        'last_name': visit['last_name'],
+                        'visit_count': visit['visit_count'],
+                        'last_visit': visit['timestamp'].isoformat() if visit['timestamp'] else None
+                    }
+                    for visit in visits
+                ],
+                'likes': [
+                    {
+                        'liker_id': like['liker_id'],
+                        'username': like['username'],
+                        'first_name': like['first_name'],
+                        'last_name': like['last_name'],
+                        'liked_at': like['created_at'].isoformat() if like['created_at'] else None
+                    }
+                    for like in likes
+                ],
+                'stats': {
+                    'total_visits': len(visits),
+                    'total_likes': len(likes)
+                }
             }
 
             return jsonify(profile), 200

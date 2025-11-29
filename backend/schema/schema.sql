@@ -74,3 +74,46 @@ CREATE TABLE user_tags (
 
 CREATE INDEX idx_user_tags_user_id ON user_tags(user_id);
 CREATE INDEX idx_user_tags_tag_id ON user_tags(tag_id);
+
+
+CREATE TABLE visits (
+    id SERIAL PRIMARY KEY,
+    visitor_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    visited_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    visit_count INTEGER DEFAULT 1
+);
+
+CREATE UNIQUE INDEX idx_visits_unique_daily ON visits (visitor_id, visited_id, DATE(timestamp));
+CREATE INDEX idx_visits_visited_id ON visits(visited_id);
+CREATE INDEX idx_visits_visitor_id ON visits(visitor_id);
+CREATE INDEX idx_visits_timestamp ON visits(timestamp DESC);
+
+
+-- After visits table (after line 89)
+
+CREATE TABLE likes (
+    id SERIAL PRIMARY KEY,
+    liker_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    liked_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_like UNIQUE (liker_id, liked_id),
+    CONSTRAINT no_self_like CHECK (liker_id != liked_id)
+);
+
+CREATE INDEX idx_likes_liker_id ON likes(liker_id);
+CREATE INDEX idx_likes_liked_id ON likes(liked_id);
+CREATE INDEX idx_likes_created_at ON likes(created_at DESC);
+
+CREATE TABLE blocks (
+    id SERIAL PRIMARY KEY,
+    blocker_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    blocked_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_block UNIQUE (blocker_id, blocked_id),
+    CONSTRAINT no_self_block CHECK (blocker_id != blocked_id)
+);
+
+CREATE INDEX idx_blocks_blocker_id ON blocks(blocker_id);
+CREATE INDEX idx_blocks_blocked_id ON blocks(blocked_id);
+CREATE INDEX idx_blocks_created_at ON blocks(created_at DESC);
