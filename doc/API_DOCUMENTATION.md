@@ -5,6 +5,9 @@
 **API Prefixes:** 
 - `/api/auth` - Authentication endpoints
 - `/api/profile` - Profile management endpoints
+- `/api/users` - User interaction endpoints (view, like, block, report)
+- `/api/browsing` - Matching algorithm / suggestions
+- `/api/tags` - Tags management endpoints
 
 ---
 
@@ -1131,7 +1134,30 @@ None required
       "id": 2,
       "tag_name": "#geek"
     }
-  ]
+  ],
+  "visits": [
+    {
+      "visitor_id": 42,
+      "username": "janedoe",
+      "first_name": "Jane",
+      "last_name": "Doe",
+      "visit_count": 3,
+      "last_visit": "2025-11-24T15:30:00"
+    }
+  ],
+  "likes": [
+    {
+      "liker_id": 42,
+      "username": "janedoe",
+      "first_name": "Jane",
+      "last_name": "Doe",
+      "liked_at": "2025-11-24T14:20:00"
+    }
+  ],
+  "stats": {
+    "total_visits": 1,
+    "total_likes": 1
+  }
 }
 ```
 
@@ -2438,6 +2464,1101 @@ const TagsList = ({ tags, onTagRemoved }) => {
 
 ---
 
+## User Endpoints
+
+### 1. View User Profile
+
+**Endpoint:** `GET /api/users/<target_user_id>`
+
+**Description:** View another user's profile. Records visit automatically and returns profile data with relationship status.
+
+**Headers:**
+```
+Authorization: Bearer <JWT_TOKEN>
+Content-Type: application/json
+```
+
+**URL Parameters:**
+- `target_user_id` (integer, required): ID of the user to view
+
+**Request Body:**
+```
+None required
+```
+
+**Success Response (200 OK):**
+```json
+{
+  "id": 42,
+  "username": "janedoe",
+  "first_name": "Jane",
+  "last_name": "Doe",
+  "bio": "Love traveling and coding",
+  "gender": "Female",
+  "sexual_preference": "Straight",
+  "location": {
+    "latitude": 40.7128,
+    "longitude": -74.0060
+  },
+  "age": 28,
+  "date_of_birth": "1997-05-15",
+  "fame_rating": 5.5,
+  "is_verified": true,
+  "is_online": true,
+  "last_online": "2025-11-24T15:30:00",
+  "created_at": "2025-11-20T10:00:00",
+  "images": [
+    {
+      "id": 10,
+      "file_path": "/static/uploads/user_42/image1.jpg",
+      "created_at": "2025-11-20T11:00:00"
+    }
+  ],
+  "tags": [
+    {
+      "id": 1,
+      "tag_name": "#travel"
+    }
+  ],
+  "liked_by_me": false,
+  "liked_by_them": true,
+  "connected": false
+}
+```
+
+**Error Responses:**
+
+**400 Bad Request - Self View:**
+```json
+{
+  "error": "Cannot view your own profile"
+}
+```
+
+**401 Unauthorized - Missing/Invalid Token:**
+```json
+{
+  "error": "Token is missing"
+}
+```
+
+**403 Forbidden - User Blocked:**
+```json
+{
+  "error": "User profile not available"
+}
+```
+
+**404 Not Found:**
+```json
+{
+  "error": "User not found"
+}
+```
+
+**500 Internal Server Error:**
+```json
+{
+  "error": "Failed to view profile: [error details]"
+}
+```
+
+**Frontend Usage (JavaScript/React):**
+```javascript
+const viewUserProfile = async (userId) => {
+  const token = localStorage.getItem('token');
+  
+  try {
+    const response = await fetch(`http://localhost:5000/api/users/${userId}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      console.log('User profile:', data);
+      return { success: true, profile: data };
+    } else {
+      console.error('Failed to view profile:', data.error);
+      return { success: false, error: data.error };
+    }
+  } catch (error) {
+    console.error('Network error:', error);
+    return { success: false, error: 'Network error occurred' };
+  }
+};
+```
+
+**Frontend Usage (Axios):**
+```javascript
+import axios from 'axios';
+
+const viewUserProfile = async (userId) => {
+  try {
+    const response = await axios.get(`http://localhost:5000/api/users/${userId}`, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      }
+    });
+    
+    return { success: true, profile: response.data };
+  } catch (error) {
+    if (error.response) {
+      return { success: false, error: error.response.data.error };
+    } else {
+      return { success: false, error: 'Network error occurred' };
+    }
+  }
+};
+```
+
+**Behavior:**
+- Automatically records visit (one per day, increments visit_count for multiple visits same day)
+- Checks for blocks (returns 403 if either user blocked the other)
+- Returns relationship status (`liked_by_me`, `liked_by_them`, `connected`)
+- Shows online status (true if last_online < 5 minutes ago)
+- Does not include email/password (public profile data only)
+
+---
+
+### 2. Like/Unlike User Profile
+
+**Endpoint:** `POST /api/users/<target_user_id>/like`
+
+**Description:** Like or unlike a user's profile. Uses a boolean flag to toggle like status.
+
+**Headers:**
+```
+Authorization: Bearer <JWT_TOKEN>
+Content-Type: application/json
+```
+
+**URL Parameters:**
+- `target_user_id` (integer, required): ID of the user to like/unlike
+
+**Request Body:**
+```json
+{
+  "like": true
+}
+```
+or
+```json
+{
+  "like": false
+}
+```
+
+**Field Validation:**
+- `like`: Boolean (required) - `true` to like, `false` to unlike
+
+**Success Response (200 OK) - Like:**
+```json
+{
+  "message": "Profile liked successfully",
+  "liked_by_me": true,
+  "liked_by_them": false,
+  "connected": false
+}
+```
+
+**Success Response (200 OK) - Unlike:**
+```json
+{
+  "message": "Profile unliked successfully",
+  "liked_by_me": false,
+  "liked_by_them": false,
+  "connected": false
+}
+```
+
+**Success Response (200 OK) - Already Liked:**
+```json
+{
+  "message": "Already liked this user",
+  "liked_by_me": true,
+  "liked_by_them": true,
+  "connected": true
+}
+```
+
+**Success Response (200 OK) - Mutual Like (Connected):**
+```json
+{
+  "message": "Profile liked successfully",
+  "liked_by_me": true,
+  "liked_by_them": true,
+  "connected": true
+}
+```
+
+**Error Responses:**
+
+**400 Bad Request - Missing Field:**
+```json
+{
+  "error": "Missing \"like\" field in request body"
+}
+```
+
+**400 Bad Request - Invalid Type:**
+```json
+{
+  "error": "\"like\" must be a boolean (true/false)"
+}
+```
+
+**400 Bad Request - Self Like:**
+```json
+{
+  "error": "Cannot like your own profile"
+}
+```
+
+**401 Unauthorized - Missing/Invalid Token:**
+```json
+{
+  "error": "Token is missing"
+}
+```
+
+**403 Forbidden - User Blocked:**
+```json
+{
+  "error": "User profile not available"
+}
+```
+
+**404 Not Found:**
+```json
+{
+  "error": "User not found"
+}
+```
+
+**500 Internal Server Error:**
+```json
+{
+  "error": "Failed to toggle like: [error details]"
+}
+```
+
+**Frontend Usage (JavaScript/React):**
+```javascript
+const toggleLike = async (userId, likeStatus) => {
+  const token = localStorage.getItem('token');
+  
+  try {
+    const response = await fetch(`http://localhost:5000/api/users/${userId}/like`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ like: likeStatus })
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      console.log('Like toggled:', data.message);
+      return { success: true, data };
+    } else {
+      console.error('Toggle like failed:', data.error);
+      return { success: false, error: data.error };
+    }
+  } catch (error) {
+    console.error('Network error:', error);
+    return { success: false, error: 'Network error occurred' };
+  }
+};
+```
+
+**Frontend Usage (Axios):**
+```javascript
+import axios from 'axios';
+
+const toggleLike = async (userId, likeStatus) => {
+  try {
+    const response = await axios.post(
+      `http://localhost:5000/api/users/${userId}/like`,
+      { like: likeStatus },
+      {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      }
+    );
+    
+    return { success: true, data: response.data };
+  } catch (error) {
+    if (error.response) {
+      return { success: false, error: error.response.data.error };
+    } else {
+      return { success: false, error: 'Network error occurred' };
+    }
+  }
+};
+```
+
+**React Component Example:**
+```javascript
+import { useState } from 'react';
+
+const LikeButton = ({ userId, initialLiked }) => {
+  const [liked, setLiked] = useState(initialLiked);
+  const [loading, setLoading] = useState(false);
+  const [connected, setConnected] = useState(false);
+
+  const handleLike = async () => {
+    setLoading(true);
+    const newLikeStatus = !liked;
+    
+    const result = await toggleLike(userId, newLikeStatus);
+    setLoading(false);
+    
+    if (result.success) {
+      setLiked(result.data.liked_by_me);
+      setConnected(result.data.connected);
+      
+      if (result.data.connected) {
+        // Show notification: "It's a match!"
+        alert("It's a match! You can now chat.");
+      }
+    } else {
+      alert(result.error);
+    }
+  };
+
+  return (
+    <button 
+      onClick={handleLike} 
+      disabled={loading}
+      className={liked ? 'liked' : ''}
+    >
+      {loading ? '...' : liked ? '❤️ Liked' : '🤍 Like'}
+      {connected && ' ✓ Connected'}
+    </button>
+  );
+};
+```
+
+**Behavior:**
+- Single endpoint for both like and unlike (toggle via boolean)
+- Prevents self-like
+- Checks for blocks before allowing like
+- Returns relationship status (`liked_by_me`, `liked_by_them`, `connected`)
+- If mutual like → `connected: true` (enables chat)
+- If unlike → `connected: false` (disables chat)
+- Handles already liked/unliked cases gracefully
+
+---
+
+### 3. Block User
+
+**Endpoint:** `POST /api/users/<target_user_id>/block`
+
+**Description:** Block a user. Blocks user from appearing in search/notifications. Disables chat. Removes any existing likes between users (breaks connection).
+
+**Headers:**
+```
+Authorization: Bearer <JWT_TOKEN>
+Content-Type: application/json
+```
+
+**URL Parameters:**
+- `target_user_id` (integer, required): ID of the user to block
+
+**Request Body:**
+```
+None required (empty body or omit)
+```
+
+**Success Response (200 OK):**
+```json
+{
+  "message": "User blocked successfully",
+  "blocked": true,
+  "blocked_user_id": 42
+}
+```
+
+**Success Response (200 OK) - Already Blocked:**
+```json
+{
+  "message": "User already blocked",
+  "blocked": true
+}
+```
+
+**Error Responses:**
+
+**400 Bad Request - Self Block:**
+```json
+{
+  "error": "Cannot block yourself"
+}
+```
+
+**401 Unauthorized - Missing/Invalid Token:**
+```json
+{
+  "error": "Token is missing"
+}
+```
+
+**404 Not Found:**
+```json
+{
+  "error": "User not found"
+}
+```
+
+**500 Internal Server Error:**
+```json
+{
+  "error": "Failed to block user: [error details]"
+}
+```
+
+**Frontend Usage (JavaScript/React):**
+```javascript
+const blockUser = async (userId) => {
+  const token = localStorage.getItem('token');
+  
+  try {
+    const response = await fetch(`http://localhost:5000/api/users/${userId}/block`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({}) // Empty body or omit
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      console.log('User blocked:', data.message);
+      return { success: true, data };
+    } else {
+      console.error('Block failed:', data.error);
+      return { success: false, error: data.error };
+    }
+  } catch (error) {
+    console.error('Network error:', error);
+    return { success: false, error: 'Network error occurred' };
+  }
+};
+```
+
+**Frontend Usage (Axios):**
+```javascript
+import axios from 'axios';
+
+const blockUser = async (userId) => {
+  try {
+    const response = await axios.post(
+      `http://localhost:5000/api/users/${userId}/block`,
+      {},
+      {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      }
+    );
+    
+    return { success: true, data: response.data };
+  } catch (error) {
+    if (error.response) {
+      return { success: false, error: error.response.data.error };
+    } else {
+      return { success: false, error: 'Network error occurred' };
+    }
+  }
+};
+```
+
+**React Component Example:**
+```javascript
+import { useState } from 'react';
+
+const BlockButton = ({ userId, onBlocked }) => {
+  const [loading, setLoading] = useState(false);
+
+  const handleBlock = async () => {
+    if (!confirm('Are you sure you want to block this user? This will remove them from your matches and disable chat.')) {
+      return;
+    }
+
+    setLoading(true);
+    const result = await blockUser(userId);
+    setLoading(false);
+    
+    if (result.success) {
+      alert('User blocked successfully');
+      onBlocked(userId);
+      // Redirect or update UI
+    } else {
+      alert(result.error);
+    }
+  };
+
+  return (
+    <button 
+      onClick={handleBlock} 
+      disabled={loading}
+      className="block-button"
+    >
+      {loading ? 'Blocking...' : 'Block User'}
+    </button>
+  );
+};
+```
+
+**Behavior:**
+- Prevents self-block
+- Checks if already blocked (returns success if already blocked)
+- Inserts block record in `blocks` table
+- Removes any existing likes between users (breaks connection)
+- Blocked user will not appear in search/notifications
+- Chat is disabled between blocked users
+- Block is one-way (blocker blocks blocked user)
+
+---
+
+### 4. Report User
+
+**Endpoint:** `POST /api/users/<target_user_id>/report`
+
+**Description:** Report a user as "Fake Account". Stores report in database for moderation.
+
+**Headers:**
+```
+Authorization: Bearer <JWT_TOKEN>
+Content-Type: application/json
+```
+
+**URL Parameters:**
+- `target_user_id` (integer, required): ID of the user to report
+
+**Request Body:**
+```
+None required (empty body or omit)
+```
+
+**Success Response (200 OK):**
+```json
+{
+  "message": "User reported successfully",
+  "reported": true,
+  "reported_user_id": 42
+}
+```
+
+**Success Response (200 OK) - Already Reported:**
+```json
+{
+  "message": "User already reported",
+  "reported": true
+}
+```
+
+**Error Responses:**
+
+**400 Bad Request - Self Report:**
+```json
+{
+  "error": "Cannot report yourself"
+}
+```
+
+**401 Unauthorized - Missing/Invalid Token:**
+```json
+{
+  "error": "Token is missing"
+}
+```
+
+**404 Not Found:**
+```json
+{
+  "error": "User not found"
+}
+```
+
+**500 Internal Server Error:**
+```json
+{
+  "error": "Failed to report user: [error details]"
+}
+```
+
+**Frontend Usage (JavaScript/React):**
+```javascript
+const reportUser = async (userId) => {
+  const token = localStorage.getItem('token');
+  
+  try {
+    const response = await fetch(`http://localhost:5000/api/users/${userId}/report`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({}) // Empty body or omit
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      console.log('User reported:', data.message);
+      return { success: true, data };
+    } else {
+      console.error('Report failed:', data.error);
+      return { success: false, error: data.error };
+    }
+  } catch (error) {
+    console.error('Network error:', error);
+    return { success: false, error: 'Network error occurred' };
+  }
+};
+```
+
+**Frontend Usage (Axios):**
+```javascript
+import axios from 'axios';
+
+const reportUser = async (userId) => {
+  try {
+    const response = await axios.post(
+      `http://localhost:5000/api/users/${userId}/report`,
+      {},
+      {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      }
+    );
+    
+    return { success: true, data: response.data };
+  } catch (error) {
+    if (error.response) {
+      return { success: false, error: error.response.data.error };
+    } else {
+      return { success: false, error: 'Network error occurred' };
+    }
+  }
+};
+```
+
+**React Component Example:**
+```javascript
+import { useState } from 'react';
+
+const ReportButton = ({ userId, onReported }) => {
+  const [loading, setLoading] = useState(false);
+
+  const handleReport = async () => {
+    if (!confirm('Are you sure you want to report this user as a fake account?')) {
+      return;
+    }
+
+    setLoading(true);
+    const result = await reportUser(userId);
+    setLoading(false);
+    
+    if (result.success) {
+      alert('User reported successfully');
+      onReported(userId);
+    } else {
+      alert(result.error);
+    }
+  };
+
+  return (
+    <button 
+      onClick={handleReport} 
+      disabled={loading}
+      className="report-button"
+    >
+      {loading ? 'Reporting...' : 'Report Fake Account'}
+    </button>
+  );
+};
+```
+
+**Behavior:**
+- Prevents self-report
+- Checks if already reported (returns success if already reported)
+- Inserts report record in `reports` table
+- Stores report for moderation/admin review
+- One report per reporter-reported pair (unique constraint)
+
+---
+
+## Browsing Endpoints
+
+### 1. Get Suggested Profiles (Matching Algorithm)
+
+**Endpoint:** `GET /api/browsing`
+
+**Description:** Get suggested profiles for the current user based on the matching algorithm. Filters by sexual orientation, excludes blocked users, and can sort/filter by distance, age, fame rating, and common tags.
+
+**Headers:**
+```
+Authorization: Bearer <jwt_token>
+```
+
+**Query Parameters:**
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `sort` | string | `distance` | Sort field: `distance`, `age`, `fame_rating`, `common_tags` |
+| `order` | string | `asc` for distance, `desc` for others | Sort order: `asc` or `desc` |
+| `min_age` | int | none | Minimum age filter |
+| `max_age` | int | none | Maximum age filter |
+| `max_distance` | int | none | Maximum distance in kilometers |
+| `min_fame` | float | none | Minimum fame rating (0.00-5.00) |
+| `max_fame` | float | none | Maximum fame rating (0.00-5.00) |
+| `tags` | string | none | Comma-separated tag IDs to filter by (e.g., `1,2,3`) |
+| `page` | int | `1` | Page number for pagination |
+| `limit` | int | `20` | Results per page (max: 50) |
+
+**Success Response (200 OK):**
+```json
+{
+  "users": [
+    {
+      "id": 42,
+      "username": "jane_doe",
+      "first_name": "Jane",
+      "last_name": "Doe",
+      "age": 28,
+      "gender": "Female",
+      "bio": "Love hiking and photography",
+      "fame_rating": 4.5,
+      "distance_km": 5.2,
+      "common_tags_count": 3,
+      "tags": ["#travel", "#photography", "#hiking"],
+      "profile_image": "/static/uploads/user_42/profile.jpg",
+      "is_online": true,
+      "last_online": "2025-11-30T12:30:00"
+    },
+    {
+      "id": 58,
+      "username": "sarah_smith",
+      "first_name": "Sarah",
+      "last_name": "Smith",
+      "age": 25,
+      "gender": "Female",
+      "bio": "Coffee addict",
+      "fame_rating": 3.8,
+      "distance_km": 12.7,
+      "common_tags_count": 2,
+      "tags": ["#coffee", "#music"],
+      "profile_image": null,
+      "is_online": false,
+      "last_online": "2025-11-29T18:00:00"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 45,
+    "pages": 3
+  }
+}
+```
+
+**Success Response (200 OK) - No Matches:**
+```json
+{
+  "users": [],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 0,
+    "pages": 0
+  }
+}
+```
+
+**Error Responses:**
+
+**401 Unauthorized - Missing/Invalid Token:**
+```json
+{
+  "error": "Token is missing"
+}
+```
+
+**404 Not Found - User Not Found:**
+```json
+{
+  "error": "User not found"
+}
+```
+
+**500 Internal Server Error:**
+```json
+{
+  "error": "Failed to get suggestions: [error details]"
+}
+```
+
+**Frontend Usage (JavaScript/React):**
+```javascript
+// Basic usage - get suggestions sorted by distance
+const getSuggestions = async (token) => {
+  const response = await fetch('http://localhost:5000/api/browsing', {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+  return response.json();
+};
+
+// With filters
+const getSuggestionsFiltered = async (token, filters) => {
+  const params = new URLSearchParams();
+  
+  if (filters.sort) params.append('sort', filters.sort);
+  if (filters.order) params.append('order', filters.order);
+  if (filters.minAge) params.append('min_age', filters.minAge);
+  if (filters.maxAge) params.append('max_age', filters.maxAge);
+  if (filters.maxDistance) params.append('max_distance', filters.maxDistance);
+  if (filters.minFame) params.append('min_fame', filters.minFame);
+  if (filters.maxFame) params.append('max_fame', filters.maxFame);
+  if (filters.tags?.length) params.append('tags', filters.tags.join(','));
+  if (filters.page) params.append('page', filters.page);
+  if (filters.limit) params.append('limit', filters.limit);
+  
+  const response = await fetch(`http://localhost:5000/api/browsing?${params}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+  return response.json();
+};
+```
+
+**Frontend Usage (Axios):**
+```javascript
+import axios from 'axios';
+
+const api = axios.create({
+  baseURL: 'http://localhost:5000/api'
+});
+
+// Basic usage
+const getSuggestions = async (token) => {
+  return api.get('/browsing', {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+};
+
+// With filters
+const getSuggestionsFiltered = async (token, filters) => {
+  return api.get('/browsing', {
+    headers: { Authorization: `Bearer ${token}` },
+    params: {
+      sort: filters.sort,
+      order: filters.order,
+      min_age: filters.minAge,
+      max_age: filters.maxAge,
+      max_distance: filters.maxDistance,
+      min_fame: filters.minFame,
+      max_fame: filters.maxFame,
+      tags: filters.tags?.join(','),
+      page: filters.page,
+      limit: filters.limit
+    }
+  });
+};
+```
+
+**React Component Example:**
+```jsx
+import { useState, useEffect } from 'react';
+
+const BrowsingPage = ({ token }) => {
+  const [users, setUsers] = useState([]);
+  const [pagination, setPagination] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [filters, setFilters] = useState({
+    sort: 'distance',
+    order: 'asc',
+    page: 1,
+    limit: 20
+  });
+
+  const fetchSuggestions = async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          params.append(key, value);
+        }
+      });
+      
+      const response = await fetch(`/api/browsing?${params}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await response.json();
+      
+      if (response.ok) {
+        setUsers(data.users);
+        setPagination(data.pagination);
+      }
+    } catch (error) {
+      console.error('Failed to fetch suggestions:', error);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchSuggestions();
+  }, [filters]);
+
+  return (
+    <div className="browsing-page">
+      {/* Filters */}
+      <div className="filters">
+        <select 
+          value={filters.sort} 
+          onChange={(e) => setFilters({...filters, sort: e.target.value})}
+        >
+          <option value="distance">Sort by Distance</option>
+          <option value="age">Sort by Age</option>
+          <option value="fame_rating">Sort by Fame</option>
+          <option value="common_tags">Sort by Common Tags</option>
+        </select>
+        
+        <input 
+          type="number" 
+          placeholder="Max Distance (km)"
+          onChange={(e) => setFilters({...filters, max_distance: e.target.value})}
+        />
+        
+        <input 
+          type="number" 
+          placeholder="Min Age"
+          onChange={(e) => setFilters({...filters, min_age: e.target.value})}
+        />
+        
+        <input 
+          type="number" 
+          placeholder="Max Age"
+          onChange={(e) => setFilters({...filters, max_age: e.target.value})}
+        />
+      </div>
+
+      {/* Results */}
+      {loading ? (
+        <p>Loading...</p>
+      ) : (
+        <div className="user-grid">
+          {users.map(user => (
+            <div key={user.id} className="user-card">
+              <img 
+                src={user.profile_image || '/default-avatar.png'} 
+                alt={user.username}
+              />
+              <h3>{user.first_name}, {user.age}</h3>
+              <p>{user.distance_km} km away</p>
+              <p>Fame: {user.fame_rating.toFixed(1)}</p>
+              <p>{user.common_tags_count} common tags</p>
+              {user.is_online && <span className="online-badge">Online</span>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Pagination */}
+      <div className="pagination">
+        <button 
+          disabled={filters.page <= 1}
+          onClick={() => setFilters({...filters, page: filters.page - 1})}
+        >
+          Previous
+        </button>
+        <span>Page {pagination.page} of {pagination.pages}</span>
+        <button 
+          disabled={filters.page >= pagination.pages}
+          onClick={() => setFilters({...filters, page: filters.page + 1})}
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  );
+};
+```
+
+**cURL Examples:**
+```bash
+# Basic browsing (sorted by distance)
+curl -X GET "http://localhost:5000/api/browsing" \
+  -H "Authorization: Bearer <token>"
+
+# Sort by fame rating (descending)
+curl -X GET "http://localhost:5000/api/browsing?sort=fame_rating&order=desc" \
+  -H "Authorization: Bearer <token>"
+
+# Filter by age range
+curl -X GET "http://localhost:5000/api/browsing?min_age=25&max_age=35" \
+  -H "Authorization: Bearer <token>"
+
+# Filter by distance
+curl -X GET "http://localhost:5000/api/browsing?max_distance=50" \
+  -H "Authorization: Bearer <token>"
+
+# Sort by common tags and filter by tag IDs
+curl -X GET "http://localhost:5000/api/browsing?sort=common_tags&order=desc&tags=1,2,3" \
+  -H "Authorization: Bearer <token>"
+
+# Pagination
+curl -X GET "http://localhost:5000/api/browsing?page=2&limit=10" \
+  -H "Authorization: Bearer <token>"
+
+# Combined filters
+curl -X GET "http://localhost:5000/api/browsing?sort=distance&min_age=20&max_age=30&max_distance=100&min_fame=2.5&page=1&limit=20" \
+  -H "Authorization: Bearer <token>"
+```
+
+**Matching Algorithm Details:**
+
+1. **Orientation Filtering:**
+   - Straight users see opposite gender who are straight/bisexual
+   - Gay users see same gender who are gay/bisexual
+   - Bisexual users see all compatible orientations
+
+2. **Exclusions:**
+   - Blocked users (in either direction) are excluded
+   - Current user is excluded
+   - Unverified users are excluded
+
+3. **Distance Calculation:**
+   - Uses Haversine formula for GPS coordinates
+   - Returns 9999 km if location data is missing
+
+4. **Sorting Options:**
+   - `distance`: Closest users first (default)
+   - `age`: Youngest/oldest first
+   - `fame_rating`: Highest/lowest rated first
+   - `common_tags`: Most shared interests first
+
+5. **Pagination:**
+   - Default: 20 results per page, max 50
+   - Returns total count and page count
+
+---
+
 ## Tags Endpoints
 
 ### 1. Get All Tags
@@ -2848,6 +3969,48 @@ curl -X GET http://localhost:5000/api/tags
 curl -X GET "http://localhost:5000/api/tags?q=vegan"
 ```
 
+**View User Profile:**
+```bash
+curl -X GET http://localhost:5000/api/users/42 \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN_HERE"
+```
+
+**Like User Profile:**
+```bash
+curl -X POST http://localhost:5000/api/users/42/like \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN_HERE" \
+  -d '{
+    "like": true
+  }'
+```
+
+**Unlike User Profile:**
+```bash
+curl -X POST http://localhost:5000/api/users/42/like \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN_HERE" \
+  -d '{
+    "like": false
+  }'
+```
+
+**Block User:**
+```bash
+curl -X POST http://localhost:5000/api/users/42/block \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN_HERE" \
+  -d '{}'
+```
+
+**Report User:**
+```bash
+curl -X POST http://localhost:5000/api/users/42/report \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN_HERE" \
+  -d '{}'
+```
+
 ### Postman Collection
 
 **Register Request:**
@@ -2994,6 +4157,50 @@ curl -X GET "http://localhost:5000/api/tags?q=vegan"
 - Replace `{tag_id}` with actual tag ID (integer)
 - Body: None required
 
+**View User Profile Request:**
+- Method: `GET`
+- URL: `http://localhost:5000/api/users/{target_user_id}`
+- Headers: `Authorization: Bearer {token}`
+- Replace `{target_user_id}` with actual user ID (integer, e.g., `42`)
+- Body: None required
+
+**Like User Profile Request:**
+- Method: `POST`
+- URL: `http://localhost:5000/api/users/{target_user_id}/like`
+- Headers:
+  - `Content-Type: application/json`
+  - `Authorization: Bearer {token}`
+- Replace `{target_user_id}` with actual user ID (integer, e.g., `42`)
+- Body (raw JSON):
+```json
+{
+  "like": true
+}
+```
+
+**Unlike User Profile Request:**
+- Method: `POST`
+- URL: `http://localhost:5000/api/users/{target_user_id}/like`
+- Headers:
+  - `Content-Type: application/json`
+  - `Authorization: Bearer {token}`
+- Replace `{target_user_id}` with actual user ID (integer, e.g., `42`)
+- Body (raw JSON):
+```json
+{
+  "like": false
+}
+```
+
+**Block User Request:**
+- Method: `POST`
+- URL: `http://localhost:5000/api/users/{target_user_id}/block`
+- Headers:
+  - `Content-Type: application/json`
+  - `Authorization: Bearer {token}`
+- Replace `{target_user_id}` with actual user ID (integer, e.g., `42`)
+- Body: Empty JSON `{}` or omit
+
 **Postman Environment Variables:**
 Create a Postman environment with:
 - `base_url`: `http://localhost:5000`
@@ -3079,5 +4286,39 @@ pm.environment.set("token", pm.response.json().token);
     - Cannot contain common dictionary words (50 most common passwords/English words)
     - Dictionary validation applies to both registration and password reset
 
-14. **Base URL:** Change `localhost:5000` to your production domain when deploying.
+14. **User Profile Viewing:**
+    - `GET /api/users/<id>` records visits automatically (one per day, increments visit_count)
+    - Visit is recorded when viewing another user's profile
+    - Returns relationship status (`liked_by_me`, `liked_by_them`, `connected`)
+    - Shows online status (true if last_online < 5 minutes ago)
+    - Blocks prevent viewing (returns 403 if either user blocked the other)
+    - Cannot view your own profile (use `/api/profile/me` instead)
+
+15. **Like/Unlike Profile:**
+    - Single endpoint `POST /api/users/<id>/like` with boolean flag
+    - `{"like": true}` to like, `{"like": false}` to unlike
+    - Mutual like creates "connection" (`connected: true`)
+    - Connection enables chat functionality
+    - Unlike breaks connection and disables chat
+    - Prevents self-like
+    - Checks for blocks before allowing like
+
+16. **Block User:**
+    - Endpoint `POST /api/users/<id>/block` blocks a user
+    - Blocked user no longer appears in search/notifications
+    - Chat is disabled between blocked users
+    - Removes any existing likes between users (breaks connection)
+    - Prevents self-block
+    - Block is one-way (blocker blocks blocked user)
+    - Returns success if user already blocked
+
+17. **Profile Stats (Visits & Likes):**
+    - `GET /api/profile/me` includes `visits` and `likes` arrays
+    - `visits`: Shows who viewed your profile (with visit_count and last_visit timestamp)
+    - `likes`: Shows who liked you (with liked_at timestamp)
+    - `stats`: Summary counts (total_visits, total_likes)
+    - Visits limited to 50 most recent
+    - All ordered by most recent first
+
+18. **Base URL:** Change `localhost:5000` to your production domain when deploying.
 

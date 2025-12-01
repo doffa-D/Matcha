@@ -71,8 +71,18 @@ def token_required(f):
         if not payload:
             return jsonify({'error': 'Token is invalid, expired'}), 401
         
+        user_id = payload['user_id']
+        
+        # Update last_online on every authenticated request
+        # This ensures is_online() status is accurate
+        with Database() as db:
+            db.query(
+                "UPDATE users SET last_online = CURRENT_TIMESTAMP WHERE id = %s",
+                (user_id,)
+            )
+        
         # Add user_id to kwargs for route handler
-        kwargs['current_user_id'] = payload['user_id']
+        kwargs['current_user_id'] = user_id
         
         return f(*args, **kwargs)
     

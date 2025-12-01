@@ -117,3 +117,31 @@ CREATE TABLE blocks (
 CREATE INDEX idx_blocks_blocker_id ON blocks(blocker_id);
 CREATE INDEX idx_blocks_blocked_id ON blocks(blocked_id);
 CREATE INDEX idx_blocks_created_at ON blocks(created_at DESC);
+
+CREATE TABLE reports (
+    id SERIAL PRIMARY KEY,
+    reporter_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    reported_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_report UNIQUE (reporter_id, reported_id),
+    CONSTRAINT no_self_report CHECK (reporter_id != reported_id)
+);
+
+CREATE INDEX idx_reports_reported_id ON reports(reported_id);
+CREATE INDEX idx_reports_reporter_id ON reports(reporter_id);
+CREATE INDEX idx_reports_created_at ON reports(created_at DESC);
+
+
+
+CREATE TABLE notifications (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    type VARCHAR(50) NOT NULL CHECK (type IN ('like', 'visit', 'message', 'match', 'unlike')),
+    source_user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_notifications_user_id ON notifications(user_id);
+CREATE INDEX idx_notifications_unread ON notifications(user_id, is_read) WHERE is_read = FALSE;
+CREATE INDEX idx_notifications_created_at ON notifications(created_at DESC);
