@@ -50,10 +50,12 @@ CREATE TABLE images (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     file_path VARCHAR(500) NOT NULL,
+    is_profile_pic BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_images_user_id ON images(user_id);
+CREATE INDEX idx_images_profile_pic ON images(user_id, is_profile_pic) WHERE is_profile_pic = TRUE;
 
 
 CREATE TABLE tags (
@@ -145,3 +147,23 @@ CREATE TABLE notifications (
 CREATE INDEX idx_notifications_user_id ON notifications(user_id);
 CREATE INDEX idx_notifications_unread ON notifications(user_id, is_read) WHERE is_read = FALSE;
 CREATE INDEX idx_notifications_created_at ON notifications(created_at DESC);
+
+
+CREATE TABLE messages (
+    id SERIAL PRIMARY KEY,
+    sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    receiver_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT no_self_message CHECK (sender_id != receiver_id)
+);
+
+CREATE INDEX idx_messages_sender_id ON messages(sender_id);
+CREATE INDEX idx_messages_receiver_id ON messages(receiver_id);
+CREATE INDEX idx_messages_conversation ON messages(
+    LEAST(sender_id, receiver_id), 
+    GREATEST(sender_id, receiver_id), 
+    created_at DESC
+);
+CREATE INDEX idx_messages_unread ON messages(receiver_id, is_read) WHERE is_read = FALSE;

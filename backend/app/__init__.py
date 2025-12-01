@@ -21,6 +21,7 @@ def create_app():
     from app.blueprints.users import bp as users_bp
     from app.blueprints.browsing import bp as browsing_bp
     from app.blueprints.notifications import bp as notifications_bp
+    from app.blueprints.chat import bp as chat_bp
 
     app.register_blueprint(notifications_bp)
     app.register_blueprint(auth_bp)
@@ -28,6 +29,7 @@ def create_app():
     app.register_blueprint(tags_bp)
     app.register_blueprint(users_bp)
     app.register_blueprint(browsing_bp)
+    app.register_blueprint(chat_bp)
     
     # Register Socket.IO events
     from app.sockets import events

@@ -598,3 +598,44 @@ def delete_image(current_user_id, image_id):
         return jsonify({'error': f'Failed to delete image: {str(e)}'}), 500
 
 
+@bp.route('/images/<int:image_id>/set-profile', methods=['PUT'])
+@token_required
+def set_profile_picture(current_user_id, image_id):
+    """
+    Set an image as the profile picture.
+    Only one image can be the profile picture at a time.
+    """
+    try:
+        with Database() as db:
+            # Verify image exists and belongs to current user
+            image = db.query(
+                "SELECT id, user_id FROM images WHERE id = %s AND user_id = %s",
+                (image_id, current_user_id)
+            )
+            
+            if not image:
+                return jsonify({'error': 'Image not found'}), 404
+            
+            # Clear existing profile picture
+            db.query(
+                "UPDATE images SET is_profile_pic = FALSE WHERE user_id = %s",
+                (current_user_id,)
+            )
+            
+            # Set new profile picture
+            db.query(
+                "UPDATE images SET is_profile_pic = TRUE WHERE id = %s",
+                (image_id,)
+            )
+            
+            return jsonify({
+                'message': 'Profile picture updated',
+                'profile_image_id': image_id
+            }), 200
+    
+    except Exception as e:
+        import traceback
+        print(f"Set profile picture error: {e}")
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to set profile picture: {str(e)}'}), 500
+

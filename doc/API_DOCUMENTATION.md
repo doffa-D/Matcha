@@ -8,6 +8,8 @@
 - `/api/users` - User interaction endpoints (view, like, block, report)
 - `/api/browsing` - Matching algorithm / suggestions
 - `/api/tags` - Tags management endpoints
+- `/api/chat` - Chat/messaging endpoints
+- `/api/notifications` - Notifications endpoints
 
 ---
 
@@ -3773,6 +3775,606 @@ const useTags = (searchQuery = '') => {
 
 ---
 
+## Chat Endpoints
+
+### 1. Get Conversations
+
+**Endpoint:** `GET /api/chat/conversations`
+
+**Description:** Get list of all conversations (connected users). Returns users you're mutually connected with, sorted by last message time.
+
+**Headers:**
+```
+Authorization: Bearer <JWT_TOKEN>
+```
+
+**Success Response (200 OK):**
+```json
+{
+  "conversations": [
+    {
+      "user": {
+        "id": 42,
+        "username": "janedoe",
+        "first_name": "Jane",
+        "last_name": "Doe",
+        "profile_image": "/static/uploads/user_42/profile.jpg",
+        "is_online": true
+      },
+      "last_message": {
+        "content": "Hey, how are you?",
+        "created_at": "2025-12-01T15:30:00",
+        "is_mine": false
+      },
+      "unread_count": 2
+    }
+  ]
+}
+```
+
+**Error Responses:**
+
+**401 Unauthorized:**
+```json
+{
+  "error": "Token is missing"
+}
+```
+
+**500 Internal Server Error:**
+```json
+{
+  "error": "Failed to get conversations: [error details]"
+}
+```
+
+**Frontend Usage (JavaScript/React):**
+```javascript
+const getConversations = async () => {
+  const token = localStorage.getItem('token');
+  
+  const response = await fetch('http://localhost:5000/api/chat/conversations', {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+  
+  return response.json();
+};
+```
+
+**Frontend Usage (Axios):**
+```javascript
+const getConversations = async () => {
+  const response = await axios.get('/api/chat/conversations', {
+    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+  });
+  return response.data;
+};
+```
+
+---
+
+### 2. Get Messages
+
+**Endpoint:** `GET /api/chat/messages/<user_id>`
+
+**Description:** Get message history with another user. Only works if users are connected (mutual like). Automatically marks messages from the other user as read.
+
+**Headers:**
+```
+Authorization: Bearer <JWT_TOKEN>
+```
+
+**URL Parameters:**
+- `user_id` (integer, required): ID of the user to get messages with
+
+**Query Parameters:**
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `limit` | int | 50 | Number of messages to return (max: 100) |
+| `before_id` | int | none | Get messages before this ID (for pagination) |
+
+**Success Response (200 OK):**
+```json
+{
+  "messages": [
+    {
+      "id": 1,
+      "sender_id": 17,
+      "receiver_id": 42,
+      "content": "Hello!",
+      "is_read": true,
+      "is_mine": true,
+      "created_at": "2025-12-01T14:00:00"
+    },
+    {
+      "id": 2,
+      "sender_id": 42,
+      "receiver_id": 17,
+      "content": "Hey! How are you?",
+      "is_read": true,
+      "is_mine": false,
+      "created_at": "2025-12-01T14:05:00"
+    }
+  ],
+  "has_more": false
+}
+```
+
+**Error Responses:**
+
+**403 Forbidden - Not Connected:**
+```json
+{
+  "error": "You must be connected to chat"
+}
+```
+
+**403 Forbidden - Blocked:**
+```json
+{
+  "error": "Cannot chat with blocked user"
+}
+```
+
+**Frontend Usage:**
+```javascript
+const getMessages = async (userId, limit = 50, beforeId = null) => {
+  const token = localStorage.getItem('token');
+  let url = `http://localhost:5000/api/chat/messages/${userId}?limit=${limit}`;
+  if (beforeId) url += `&before_id=${beforeId}`;
+  
+  const response = await fetch(url, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+  
+  return response.json();
+};
+```
+
+---
+
+### 3. Send Message
+
+**Endpoint:** `POST /api/chat/messages/<user_id>`
+
+**Description:** Send a message to another user. Only works if users are connected (mutual like). Sends real-time notification and WebSocket event.
+
+**Headers:**
+```
+Authorization: Bearer <JWT_TOKEN>
+Content-Type: application/json
+```
+
+**URL Parameters:**
+- `user_id` (integer, required): ID of the user to send message to
+
+**Request Body:**
+```json
+{
+  "content": "Hello, how are you?"
+}
+```
+
+**Field Validation:**
+- `content`: String, required, max 2000 characters
+
+**Success Response (201 Created):**
+```json
+{
+  "message": "Message sent",
+  "data": {
+    "id": 123,
+    "sender_id": 17,
+    "receiver_id": 42,
+    "content": "Hello, how are you?",
+    "created_at": "2025-12-01T15:30:00"
+  }
+}
+```
+
+**Error Responses:**
+
+**400 Bad Request - Missing Content:**
+```json
+{
+  "error": "Message content required"
+}
+```
+
+**400 Bad Request - Empty Message:**
+```json
+{
+  "error": "Message cannot be empty"
+}
+```
+
+**400 Bad Request - Too Long:**
+```json
+{
+  "error": "Message too long (max 2000 characters)"
+}
+```
+
+**400 Bad Request - Self Message:**
+```json
+{
+  "error": "Cannot message yourself"
+}
+```
+
+**403 Forbidden - Not Connected:**
+```json
+{
+  "error": "You must be connected to chat"
+}
+```
+
+**404 Not Found:**
+```json
+{
+  "error": "User not found"
+}
+```
+
+**Frontend Usage:**
+```javascript
+const sendMessage = async (userId, content) => {
+  const token = localStorage.getItem('token');
+  
+  const response = await fetch(`http://localhost:5000/api/chat/messages/${userId}`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ content })
+  });
+  
+  return response.json();
+};
+```
+
+---
+
+### 4. Mark Messages Read
+
+**Endpoint:** `PUT /api/chat/messages/<user_id>/read`
+
+**Description:** Mark all messages from a specific user as read.
+
+**Headers:**
+```
+Authorization: Bearer <JWT_TOKEN>
+```
+
+**URL Parameters:**
+- `user_id` (integer, required): ID of the user whose messages to mark as read
+
+**Success Response (200 OK):**
+```json
+{
+  "message": "Messages marked as read",
+  "count": 5
+}
+```
+
+**Frontend Usage:**
+```javascript
+const markMessagesRead = async (userId) => {
+  const token = localStorage.getItem('token');
+  
+  const response = await fetch(`http://localhost:5000/api/chat/messages/${userId}/read`, {
+    method: 'PUT',
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+  
+  return response.json();
+};
+```
+
+---
+
+## Notifications Endpoints
+
+### 1. Get Notifications
+
+**Endpoint:** `GET /api/notifications`
+
+**Description:** Get list of notifications for the current user. Returns up to 50 most recent notifications.
+
+**Headers:**
+```
+Authorization: Bearer <JWT_TOKEN>
+```
+
+**Success Response (200 OK):**
+```json
+{
+  "notifications": [
+    {
+      "id": 1,
+      "type": "like",
+      "from_user": {
+        "id": 42,
+        "username": "janedoe",
+        "first_name": "Jane"
+      },
+      "is_read": false,
+      "created_at": "2025-12-01T15:30:00"
+    },
+    {
+      "id": 2,
+      "type": "match",
+      "from_user": {
+        "id": 42,
+        "username": "janedoe",
+        "first_name": "Jane"
+      },
+      "is_read": true,
+      "created_at": "2025-12-01T15:31:00"
+    }
+  ]
+}
+```
+
+**Notification Types:**
+| Type | Description |
+|------|-------------|
+| `like` | Someone liked your profile |
+| `visit` | Someone viewed your profile |
+| `message` | You received a new message |
+| `match` | You have a new connection (mutual like) |
+| `unlike` | Someone removed their like (if you were connected) |
+
+**Frontend Usage:**
+```javascript
+const getNotifications = async () => {
+  const token = localStorage.getItem('token');
+  
+  const response = await fetch('http://localhost:5000/api/notifications', {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+  
+  return response.json();
+};
+```
+
+---
+
+### 2. Get Unread Count
+
+**Endpoint:** `GET /api/notifications/unread/count`
+
+**Description:** Get the count of unread notifications. Useful for displaying badge counts.
+
+**Headers:**
+```
+Authorization: Bearer <JWT_TOKEN>
+```
+
+**Success Response (200 OK):**
+```json
+{
+  "unread_count": 5
+}
+```
+
+**Frontend Usage:**
+```javascript
+const getUnreadCount = async () => {
+  const token = localStorage.getItem('token');
+  
+  const response = await fetch('http://localhost:5000/api/notifications/unread/count', {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+  
+  const data = await response.json();
+  return data.unread_count;
+};
+```
+
+---
+
+### 3. Mark Notification as Read
+
+**Endpoint:** `PUT /api/notifications/<notif_id>/read`
+
+**Description:** Mark a specific notification as read.
+
+**Headers:**
+```
+Authorization: Bearer <JWT_TOKEN>
+```
+
+**URL Parameters:**
+- `notif_id` (integer, required): ID of the notification to mark as read
+
+**Success Response (200 OK):**
+```json
+{
+  "message": "Marked as read"
+}
+```
+
+**Frontend Usage:**
+```javascript
+const markNotificationRead = async (notifId) => {
+  const token = localStorage.getItem('token');
+  
+  const response = await fetch(`http://localhost:5000/api/notifications/${notifId}/read`, {
+    method: 'PUT',
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+  
+  return response.json();
+};
+```
+
+---
+
+## Profile Endpoints (Additional)
+
+### 8. Set Profile Picture
+
+**Endpoint:** `PUT /api/profile/images/<image_id>/set-profile`
+
+**Description:** Set an existing image as the profile picture. Only one image can be the profile picture at a time.
+
+**Headers:**
+```
+Authorization: Bearer <JWT_TOKEN>
+```
+
+**URL Parameters:**
+- `image_id` (integer, required): ID of the image to set as profile picture
+
+**Success Response (200 OK):**
+```json
+{
+  "message": "Profile picture updated",
+  "profile_image_id": 123
+}
+```
+
+**Error Responses:**
+
+**404 Not Found:**
+```json
+{
+  "error": "Image not found"
+}
+```
+
+**Frontend Usage:**
+```javascript
+const setProfilePicture = async (imageId) => {
+  const token = localStorage.getItem('token');
+  
+  const response = await fetch(`http://localhost:5000/api/profile/images/${imageId}/set-profile`, {
+    method: 'PUT',
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+  
+  return response.json();
+};
+```
+
+**React Component Example:**
+```javascript
+const ImageGallery = ({ images, onProfilePicSet }) => {
+  const [profilePicId, setProfilePicId] = useState(
+    images.find(img => img.is_profile_pic)?.id
+  );
+
+  const handleSetProfile = async (imageId) => {
+    const result = await setProfilePicture(imageId);
+    if (result.profile_image_id) {
+      setProfilePicId(imageId);
+      onProfilePicSet(imageId);
+    }
+  };
+
+  return (
+    <div className="image-gallery">
+      {images.map(image => (
+        <div key={image.id} className="image-item">
+          <img src={image.file_path} alt="Profile" />
+          {profilePicId === image.id ? (
+            <span className="badge">Profile Picture</span>
+          ) : (
+            <button onClick={() => handleSetProfile(image.id)}>
+              Set as Profile
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
+```
+
+---
+
+## WebSocket Events
+
+The application uses WebSocket (Socket.IO) for real-time features. Connect to the WebSocket server with your JWT token.
+
+### Connection
+
+```javascript
+import { io } from 'socket.io-client';
+
+const socket = io('http://localhost:5000', {
+  query: { token: localStorage.getItem('token') }
+});
+
+socket.on('connect', () => {
+  console.log('Connected to WebSocket');
+});
+
+socket.on('disconnect', () => {
+  console.log('Disconnected from WebSocket');
+});
+```
+
+### Events
+
+#### Receive Notification
+```javascript
+socket.on('notification', (data) => {
+  // data: { id, type, from_user: { id, username, first_name }, created_at }
+  console.log('New notification:', data);
+  // Update notification badge, show toast, etc.
+});
+```
+
+#### Receive Message
+```javascript
+socket.on('new_message', (data) => {
+  // data: { id, sender_id, receiver_id, content, created_at }
+  console.log('New message:', data);
+  // Add message to chat, show notification, etc.
+});
+```
+
+### React Hook Example
+```javascript
+import { useEffect, useState } from 'react';
+import { io } from 'socket.io-client';
+
+const useSocket = () => {
+  const [socket, setSocket] = useState(null);
+  const [notifications, setNotifications] = useState([]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    const newSocket = io('http://localhost:5000', {
+      query: { token }
+    });
+
+    newSocket.on('notification', (data) => {
+      setNotifications(prev => [data, ...prev]);
+    });
+
+    newSocket.on('new_message', (data) => {
+      // Handle new message
+    });
+
+    setSocket(newSocket);
+
+    return () => newSocket.close();
+  }, []);
+
+  return { socket, notifications };
+};
+```
+
+---
+
 ## Error Handling Guide
 
 ### HTTP Status Codes
@@ -4009,6 +4611,58 @@ curl -X POST http://localhost:5000/api/users/42/report \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN_HERE" \
   -d '{}'
+```
+
+**Get Conversations:**
+```bash
+curl -X GET http://localhost:5000/api/chat/conversations \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN_HERE"
+```
+
+**Get Messages:**
+```bash
+curl -X GET "http://localhost:5000/api/chat/messages/42?limit=50" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN_HERE"
+```
+
+**Send Message:**
+```bash
+curl -X POST http://localhost:5000/api/chat/messages/42 \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN_HERE" \
+  -d '{
+    "content": "Hello, how are you?"
+  }'
+```
+
+**Mark Messages Read:**
+```bash
+curl -X PUT http://localhost:5000/api/chat/messages/42/read \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN_HERE"
+```
+
+**Get Notifications:**
+```bash
+curl -X GET http://localhost:5000/api/notifications \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN_HERE"
+```
+
+**Get Unread Notification Count:**
+```bash
+curl -X GET http://localhost:5000/api/notifications/unread/count \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN_HERE"
+```
+
+**Mark Notification Read:**
+```bash
+curl -X PUT http://localhost:5000/api/notifications/1/read \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN_HERE"
+```
+
+**Set Profile Picture:**
+```bash
+curl -X PUT http://localhost:5000/api/profile/images/123/set-profile \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN_HERE"
 ```
 
 ### Postman Collection
@@ -4321,4 +4975,40 @@ pm.environment.set("token", pm.response.json().token);
     - All ordered by most recent first
 
 18. **Base URL:** Change `localhost:5000` to your production domain when deploying.
+
+19. **Chat System:**
+    - Users must be connected (mutual like) to chat
+    - Messages are limited to 2000 characters
+    - Messages from other user are auto-marked as read when fetched
+    - Real-time delivery via WebSocket (`new_message` event)
+    - Blocked users cannot send/receive messages
+    - Chat history persists in database
+
+20. **Notifications:**
+    - Real-time notifications via WebSocket (`notification` event)
+    - Types: `like`, `visit`, `message`, `match`, `unlike`
+    - Limited to 50 most recent notifications
+    - Notifications are triggered automatically by:
+      - Liking a profile → `like` notification
+      - Mutual like → `match` notification to both users
+      - Viewing a profile → `visit` notification
+      - Sending a message → `message` notification
+      - Unlike (if connected) → `unlike` notification
+
+21. **Profile Pictures:**
+    - Only one image can be the profile picture at a time
+    - Use `PUT /api/profile/images/<id>/set-profile` to change
+    - Profile picture is shown first in browsing results
+    - Images table has `is_profile_pic` boolean column
+
+22. **WebSocket Connection:**
+    - Connect with JWT token in query params: `?token=<JWT_TOKEN>`
+    - User automatically joins room `user_{user_id}` on connect
+    - `last_online` is updated on WebSocket connect
+    - Real-time events: `notification`, `new_message`
+
+23. **Seeded Test Data:**
+    - Database contains 500+ seeded user profiles
+    - Default password for seeded users: `Password123!`
+    - Seeded users have realistic data (names, bio, location, tags, etc.)
 
