@@ -3,7 +3,8 @@ CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     username VARCHAR(50) NOT NULL UNIQUE,
     email VARCHAR(255) NOT NULL UNIQUE,
-    password_hash VARCHAR(255) NOT NULL,
+    password_hash VARCHAR(255), 
+    google_id VARCHAR(255) UNIQUE,  -- Google OAuth user ID
     first_name VARCHAR(50) NOT NULL,
     last_name VARCHAR(50) NOT NULL,
     bio TEXT,
@@ -29,6 +30,7 @@ CREATE INDEX idx_users_verified ON users(is_verified);
 CREATE INDEX idx_users_last_online ON users(last_online);
 CREATE INDEX idx_users_date_of_birth ON users(date_of_birth);
 CREATE INDEX idx_users_age ON users(age);
+CREATE INDEX idx_users_google_id ON users(google_id);
 
 
 CREATE TABLE tokens (

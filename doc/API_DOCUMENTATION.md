@@ -1080,6 +1080,370 @@ axios.interceptors.response.use(
 
 ---
 
+### 7. Google OAuth - Initiate Login
+
+**Endpoint:** `GET /api/auth/google`
+
+**Description:** Get Google OAuth authorization URL. Frontend should redirect user to this URL to initiate Google sign-in.
+
+**Headers:**
+```
+None required (public endpoint)
+```
+
+**Request Body:**
+```
+None required
+```
+
+**Success Response (200 OK):**
+```json
+{
+  "auth_url": "https://accounts.google.com/o/oauth2/v2/auth?client_id=926940892587-...&redirect_uri=http://localhost:5000/api/auth/google/callback&response_type=code&scope=openid email profile&access_type=offline"
+}
+```
+
+**Error Responses:**
+
+**500 Internal Server Error - Not Configured:**
+```json
+{
+  "error": "Google OAuth not configured"
+}
+```
+
+**500 Internal Server Error:**
+```json
+{
+  "error": "Failed to generate OAuth URL: [error details]"
+}
+```
+
+**Frontend Usage (JavaScript/React):**
+```javascript
+const initiateGoogleLogin = async () => {
+  try {
+    const response = await fetch('http://localhost:5000/api/auth/google', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      // Redirect user to Google OAuth URL
+      window.location.href = data.auth_url;
+      return { success: true, authUrl: data.auth_url };
+    } else {
+      console.error('Failed to get OAuth URL:', data.error);
+      return { success: false, error: data.error };
+    }
+  } catch (error) {
+    console.error('Network error:', error);
+    return { success: false, error: 'Network error occurred' };
+  }
+};
+```
+
+**Frontend Usage (Axios):**
+```javascript
+import axios from 'axios';
+
+const initiateGoogleLogin = async () => {
+  try {
+    const response = await axios.get('http://localhost:5000/api/auth/google');
+    
+    // Redirect user to Google OAuth URL
+    window.location.href = response.data.auth_url;
+    return { success: true, authUrl: response.data.auth_url };
+  } catch (error) {
+    if (error.response) {
+      console.error('Failed to get OAuth URL:', error.response.data.error);
+      return { success: false, error: error.response.data.error };
+    } else {
+      console.error('Network error:', error.message);
+      return { success: false, error: 'Network error occurred' };
+    }
+  }
+};
+```
+
+**React Component Example:**
+```javascript
+import { useState } from 'react';
+
+const GoogleLoginButton = () => {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    setError('');
+
+    const result = await initiateGoogleLogin();
+    
+    if (!result.success) {
+      setError(result.error);
+      setLoading(false);
+    }
+    // If successful, user will be redirected to Google
+  };
+
+  return (
+    <button 
+      onClick={handleGoogleLogin} 
+      disabled={loading}
+      className="google-login-button"
+    >
+      {loading ? 'Loading...' : 'Sign in with Google'}
+      {error && <div className="error">{error}</div>}
+    </button>
+  );
+};
+```
+
+**Note:** 
+- This endpoint returns the Google OAuth authorization URL
+- Frontend should redirect user to this URL
+- User will authenticate with Google and be redirected back to `/api/auth/google/callback` with an authorization code
+- The authorization code expires quickly (usually within minutes), so it must be used immediately
+
+---
+
+### 8. Google OAuth - Callback Handler
+
+**Endpoint:** `GET /api/auth/google/callback`
+
+**Description:** Handle Google OAuth callback. Processes the authorization code from Google and returns JWT token. This endpoint is called automatically by Google after user authentication.
+
+**Headers:**
+```
+None required (public endpoint)
+```
+
+**URL Parameters:**
+- `code` (string, required): Authorization code from Google OAuth redirect
+
+**Query Parameters:**
+- `code`: Authorization code from Google (required)
+- `scope`: OAuth scopes granted (optional, informational)
+- `authuser`: Google account index (optional, informational)
+- `prompt`: OAuth prompt type (optional, informational)
+
+**Success Response (200 OK):**
+```json
+{
+  "message": "Google login successful",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "id": 519,
+    "username": "mzbakasta",
+    "email": "mzbakasta@gmail.com"
+  }
+}
+```
+
+**Error Responses:**
+
+**400 Bad Request - Missing Code:**
+```json
+{
+  "error": "Authorization code not provided"
+}
+```
+
+**400 Bad Request - Token Exchange Failed:**
+```json
+{
+  "error": "Failed to exchange authorization code",
+  "details": "Error details from Google API"
+}
+```
+
+**400 Bad Request - Invalid Token:**
+```json
+{
+  "error": "Invalid ID token: [error details]"
+}
+```
+
+**400 Bad Request - Missing Email:**
+```json
+{
+  "error": "Email not provided by Google. Please grant email permission."
+}
+```
+
+**500 Internal Server Error:**
+```json
+{
+  "error": "Google login failed: [error details]"
+}
+```
+
+**Frontend Usage (JavaScript/React):**
+```javascript
+// This endpoint is typically called automatically by Google redirect
+// But you can also call it manually if you have the code
+
+const handleGoogleCallback = async (code) => {
+  try {
+    const response = await fetch(`http://localhost:5000/api/auth/google/callback?code=${encodeURIComponent(code)}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      // Store token and user data
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      
+      console.log('Google login successful:', data.message);
+      return { success: true, data };
+    } else {
+      console.error('Google login failed:', data.error);
+      return { success: false, error: data.error };
+    }
+  } catch (error) {
+    console.error('Network error:', error);
+    return { success: false, error: 'Network error occurred' };
+  }
+};
+```
+
+**Frontend Usage (Axios):**
+```javascript
+import axios from 'axios';
+
+const handleGoogleCallback = async (code) => {
+  try {
+    const response = await axios.get('http://localhost:5000/api/auth/google/callback', {
+      params: { code }
+    });
+    
+    // Store token and user data
+    localStorage.setItem('token', response.data.token);
+    localStorage.setItem('user', JSON.stringify(response.data.user));
+    
+    return { success: true, data: response.data };
+  } catch (error) {
+    if (error.response) {
+      console.error('Google login failed:', error.response.data.error);
+      return { success: false, error: error.response.data.error };
+    } else {
+      console.error('Network error:', error.message);
+      return { success: false, error: 'Network error occurred' };
+    }
+  }
+};
+```
+
+**React Router Example - Callback Page:**
+```javascript
+import { useEffect, useState } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+
+const GoogleCallbackPage = () => {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const [status, setStatus] = useState('processing');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const code = searchParams.get('code');
+    
+    if (!code) {
+      setError('Authorization code not found');
+      setStatus('error');
+      return;
+    }
+
+    const processCallback = async () => {
+      const result = await handleGoogleCallback(code);
+      
+      if (result.success) {
+        setStatus('success');
+        // Redirect to dashboard after 2 seconds
+        setTimeout(() => navigate('/dashboard'), 2000);
+      } else {
+        setError(result.error);
+        setStatus('error');
+      }
+    };
+
+    processCallback();
+  }, [searchParams, navigate]);
+
+  if (status === 'processing') return <div>Processing Google login...</div>;
+  if (status === 'success') return <div>Login successful! Redirecting...</div>;
+  return <div>Login failed: {error}</div>;
+};
+```
+
+**Complete Google OAuth Flow Example:**
+```javascript
+// Step 1: Initiate Google OAuth
+const startGoogleLogin = async () => {
+  const response = await fetch('http://localhost:5000/api/auth/google');
+  const data = await response.json();
+  
+  if (data.auth_url) {
+    // Redirect to Google
+    window.location.href = data.auth_url;
+  }
+};
+
+// Step 2: Google redirects to /api/auth/google/callback?code=...
+// Step 3: Backend processes callback and returns token
+// Step 4: Frontend receives token and stores it
+
+// In your callback page component:
+const GoogleCallback = () => {
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    
+    if (code) {
+      handleGoogleCallback(code).then(result => {
+        if (result.success) {
+          // Redirect to dashboard
+          window.location.href = '/dashboard';
+        } else {
+          // Show error
+          alert(result.error);
+        }
+      });
+    }
+  }, []);
+  
+  return <div>Processing...</div>;
+};
+```
+
+**Behavior:**
+- Creates new user account if email doesn't exist
+- Links Google account to existing user if email matches
+- Auto-verifies OAuth users (no email verification needed)
+- Downloads Google profile picture automatically
+- Returns JWT token for authenticated requests
+- Updates `last_online` timestamp
+- Sets `google_id` in database for future logins
+
+**Note:**
+- Authorization codes are single-use and expire quickly (usually within minutes)
+- If code expires, user must restart the OAuth flow
+- The redirect URI must match exactly what's configured in Google Cloud Console
+- OAuth users don't need passwords (`password_hash` is NULL)
+- Users can link Google account to existing email-based account
+
+---
+
 ## Profile Endpoints
 
 ### 1. Get Current User Profile
@@ -2732,6 +3096,13 @@ or
 ```json
 {
   "error": "User profile not available"
+}
+```
+
+**403 Forbidden - No Profile Picture:**
+```json
+{
+  "error": "You must have a profile picture to like other users"
 }
 ```
 
@@ -4493,6 +4864,34 @@ curl -X POST http://localhost:5000/api/auth/logout \
   -H "Authorization: Bearer YOUR_JWT_TOKEN_HERE"
 ```
 
+**Google OAuth - Initiate:**
+```bash
+curl -X GET http://localhost:5000/api/auth/google
+```
+
+**Google OAuth - Callback (with code):**
+```bash
+# After Google redirects, use the code from URL
+curl -X GET "http://localhost:5000/api/auth/google/callback?code=4/0Ab32j93lxQB77NLPgbAdg-Sy1W6QqEMEQvEuLjsscwPB_cjlYiic5hbucr7XmQ22cpxSQw"
+```
+
+**Google OAuth - Complete Flow:**
+```bash
+# Step 1: Get OAuth URL
+AUTH_URL=$(curl -s http://localhost:5000/api/auth/google | jq -r '.auth_url')
+echo "Open this URL in browser: $AUTH_URL"
+
+# Step 2: After Google redirects, copy the code from URL
+# Example redirect: http://localhost:5000/api/auth/google/callback?code=4/0Ab32j93...
+
+# Step 3: Call callback with code (replace YOUR_CODE)
+curl "http://localhost:5000/api/auth/google/callback?code=YOUR_CODE"
+
+# Step 4: Save token from response
+TOKEN=$(curl -s "http://localhost:5000/api/auth/google/callback?code=YOUR_CODE" | jq -r '.token')
+echo "Token: $TOKEN"
+```
+
 **Get Profile:**
 ```bash
 curl -X GET http://localhost:5000/api/profile/me \
@@ -4731,6 +5130,29 @@ curl -X PUT http://localhost:5000/api/profile/images/123/set-profile \
 - Replace `{token}` with JWT token from login response
 - Body: None required (empty JSON `{}` or omit)
 
+**Google OAuth - Initiate Request:**
+- Method: `GET`
+- URL: `http://localhost:5000/api/auth/google`
+- Headers: None required
+- Body: None required
+- Response: Contains `auth_url` - copy this URL and open in browser
+
+**Google OAuth - Callback Request:**
+- Method: `GET`
+- URL: `http://localhost:5000/api/auth/google/callback?code={{google_code}}`
+- Headers: None required
+- Query Parameters:
+  - `code`: Authorization code from Google redirect (set as collection variable `{{google_code}}`)
+- Body: None required
+- Response: Contains `token` and `user` - save token to collection variable `{{token}}`
+- **Note:** To test this endpoint:
+  1. Run "Google OAuth - Initiate" request
+  2. Copy `auth_url` from response
+  3. Open URL in browser and authenticate with Google
+  4. After redirect, copy the `code` parameter from the callback URL
+  5. Set collection variable `{{google_code}}` = the code value
+  6. Run "Google OAuth - Callback" request
+
 **Get Profile Request:**
 - Method: `GET`
 - URL: `http://localhost:5000/api/profile/me`
@@ -4951,6 +5373,7 @@ pm.environment.set("token", pm.response.json().token);
 15. **Like/Unlike Profile:**
     - Single endpoint `POST /api/users/<id>/like` with boolean flag
     - `{"like": true}` to like, `{"like": false}` to unlike
+    - **Requires profile picture:** User must have at least one uploaded image to like others
     - Mutual like creates "connection" (`connected: true`)
     - Connection enables chat functionality
     - Unlike breaks connection and disables chat
@@ -5007,7 +5430,22 @@ pm.environment.set("token", pm.response.json().token);
     - `last_online` is updated on WebSocket connect
     - Real-time events: `notification`, `new_message`
 
-23. **Seeded Test Data:**
+23. **Google OAuth:**
+    - **Initiate:** `GET /api/auth/google` returns Google OAuth authorization URL
+    - **Callback:** `GET /api/auth/google/callback?code=...` processes authorization code and returns JWT token
+    - **Flow:** User redirects to Google → Authenticates → Google redirects back with code → Backend exchanges code for token
+    - **Authorization codes:** Single-use, expire quickly (usually within minutes) - must be used immediately
+    - **User creation:** Creates new user if email doesn't exist, links Google account if email matches existing user
+    - **Auto-verification:** OAuth users are automatically verified (no email verification needed)
+    - **Profile picture:** Google profile picture is automatically downloaded and set as profile picture
+    - **Password:** OAuth users don't have passwords (`password_hash` is NULL)
+    - **Google ID:** Stored in `google_id` column for future logins
+    - **Configuration:** Requires `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI` in `.env`
+    - **Redirect URI:** Must match exactly what's configured in Google Cloud Console
+    - **Scopes:** Requests `openid`, `email`, and `profile` scopes
+    - **Token:** Returns same JWT token format as regular login - can be used for all authenticated endpoints
+
+24. **Seeded Test Data:**
     - Database contains 500+ seeded user profiles
     - Default password for seeded users: `Password123!`
     - Seeded users have realistic data (names, bio, location, tags, etc.)

@@ -24,6 +24,9 @@ class Config:
     EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "False").lower() == "true"
     VERIFICATION_URL = os.getenv("VERIFICATION_URL")
     PASSWORD_RESET_URL = os.getenv("PASSWORD_RESET_URL")
+    GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+    GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+    GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:5000/api/auth/google/callback")
     
 class DevelopmentConfig(Config):
     DEBUG = True

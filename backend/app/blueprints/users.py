@@ -205,6 +205,14 @@ def toggle_like(current_user_id, target_user_id):
             if blocked:
                 return jsonify({'error': 'User profile not available'}), 403
 
+            # Check if current user has at least one image (profile picture required to like)
+            user_images = db.query(
+                "SELECT id FROM images WHERE user_id = %s LIMIT 1",
+                (current_user_id,)
+            )
+            if not user_images and like_status:
+                return jsonify({'error': 'You must have a profile picture to like other users'}), 403
+
             # Check current like status
             existing_like = db.query(
                 "SELECT id FROM likes WHERE liker_id = %s AND liked_id = %s",

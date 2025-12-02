@@ -14,7 +14,7 @@ def get_notifications(current_user_id):
             SELECT n.id, n.type, n.is_read, n.created_at,
                    u.id as from_id, u.username, u.first_name
             FROM notifications n
-            LEFT JOIN users u ON n.source_id = u.id
+            LEFT JOIN users u ON n.source_user_id = u.id
             WHERE n.user_id = %s
             ORDER BY n.created_at DESC
             LIMIT 50

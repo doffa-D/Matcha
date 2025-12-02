@@ -7,6 +7,9 @@ from app.db import Database
 from app.utils.email import send_verification_email,send_password_reset_email
 from app.utils.password_validator import contains_dictionary_word
 from app.jwt import generate_token, verify_token, decode_token, token_required
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
+import requests
 
 
 bp = Blueprint('auth', __name__, url_prefix='/api/auth')
@@ -367,3 +370,201 @@ def logout(current_user_id):
         print(f"Logout error: {e}")
         traceback.print_exc()
         return jsonify({'error': f'Logout failed: {str(e)}'}), 500
+
+
+
+@bp.route('/google', methods=['GET'])
+def google_login():
+    """Initiate Google OAuth login - redirects to Google"""
+    from config import Config
+    from urllib.parse import urlencode
+    
+    if not Config.GOOGLE_CLIENT_ID:
+        return jsonify({'error': 'Google OAuth not configured'}), 500
+    
+    # URL encode parameters properly
+    params = {
+        'client_id': Config.GOOGLE_CLIENT_ID,
+        'redirect_uri': Config.GOOGLE_REDIRECT_URI,
+        'response_type': 'code',
+        'scope': 'openid email profile',
+        'access_type': 'offline'
+    }
+    
+    google_auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
+    
+    return jsonify({'auth_url': google_auth_url}), 200
+
+
+@bp.route('/google/callback', methods=['GET'])
+def google_callback():
+    """Handle Google OAuth callback"""
+    from config import Config
+    from urllib.parse import unquote
+    
+    code = request.args.get('code')
+    if not code:
+        return jsonify({'error': 'Authorization code not provided'}), 400
+    
+    # URL decode the code (Flask should handle this, but be safe)
+    code = unquote(code)
+    
+    try:
+        # Exchange code for tokens
+        token_url = "https://oauth2.googleapis.com/token"
+        token_data = {
+            'code': code,
+            'client_id': Config.GOOGLE_CLIENT_ID,
+            'client_secret': Config.GOOGLE_CLIENT_SECRET,
+            'redirect_uri': Config.GOOGLE_REDIRECT_URI,
+            'grant_type': 'authorization_code'
+        }
+        
+        token_response = requests.post(token_url, data=token_data)
+        
+        # Better error handling for token exchange
+        if token_response.status_code != 200:
+            error_detail = token_response.text
+            print(f"Google token exchange failed: {token_response.status_code}")
+            print(f"Error response: {error_detail}")
+            return jsonify({
+                'error': 'Failed to exchange authorization code',
+                'details': error_detail
+            }), 400
+        
+        tokens = token_response.json()
+        
+        id_token_str = tokens.get('id_token')
+        if not id_token_str:
+            return jsonify({'error': 'Failed to get ID token from Google'}), 400
+        
+        # Verify and decode ID token
+        try:
+            idinfo = id_token.verify_oauth2_token(
+                id_token_str,
+                google_requests.Request(),
+                Config.GOOGLE_CLIENT_ID
+            )
+        except ValueError as e:
+            print(f"Token verification failed: {e}")
+            return jsonify({'error': f'Invalid ID token: {str(e)}'}), 400
+        
+        google_id = idinfo.get('sub')
+        if not google_id:
+            return jsonify({'error': 'Missing Google user ID in token'}), 400
+        
+        # Email might not be present if user didn't grant email scope
+        email = idinfo.get('email')
+        if not email:
+            # Try to use email from token claims or return error
+            return jsonify({
+                'error': 'Email not provided by Google. Please grant email permission.'
+            }), 400
+        
+        first_name = idinfo.get('given_name', '')
+        last_name = idinfo.get('family_name', '')
+        picture_url = idinfo.get('picture', '')
+        
+        with Database() as db:
+            # Check if user exists by Google ID
+            existing_user = db.query(
+                "SELECT id, username, email FROM users WHERE google_id = %s",
+                (google_id,)
+            )
+            
+            if existing_user:
+                # Existing OAuth user - login
+                user_data = existing_user[0]
+                user_id = user_data['id']
+            else:
+                # Check if email already exists (link accounts)
+                email_user = db.query(
+                    "SELECT id, username FROM users WHERE email = %s",
+                    (email,)
+                )
+                
+                if email_user:
+                    # Link Google account to existing user
+                    user_id = email_user[0]['id']
+                    db.query(
+                        "UPDATE users SET google_id = %s, is_verified = TRUE WHERE id = %s",
+                        (google_id, user_id)
+                    )
+                else:
+                    # Create new user
+                    username = email.split('@')[0]  # Use email prefix as username
+                    # Ensure username is unique
+                    base_username = username
+                    counter = 1
+                    while db.query("SELECT id FROM users WHERE username = %s", (username,)):
+                        username = f"{base_username}{counter}"
+                        counter += 1
+                    
+                    user_id = db.query(
+                        """INSERT INTO users (username, email, google_id, first_name, last_name, is_verified)
+                           VALUES (%s, %s, %s, %s, %s, TRUE) RETURNING id""",
+                        (username, email, google_id, first_name, last_name)
+                    )
+                    
+                    if isinstance(user_id, list):
+                        user_id = user_id[0]['id'] if user_id else None
+                    elif isinstance(user_id, dict):
+                        user_id = user_id.get('id')
+                    
+                    # Download profile picture if available
+                    if picture_url and user_id:
+                        try:
+                            import uuid
+                            from pathlib import Path
+                            from urllib.request import urlretrieve
+                            
+                            upload_dir = Path('static') / 'uploads' / f'user_{user_id}'
+                            upload_dir.mkdir(parents=True, exist_ok=True)
+                            
+                            file_ext = 'jpg'
+                            unique_filename = f"{uuid.uuid4()}.{file_ext}"
+                            file_path = upload_dir / unique_filename
+                            
+                            urlretrieve(picture_url, str(file_path))
+                            
+                            relative_path = f"/static/uploads/user_{user_id}/{unique_filename}"
+                            db.query(
+                                """INSERT INTO images (user_id, file_path, is_profile_pic)
+                                   VALUES (%s, %s, TRUE)""",
+                                (user_id, relative_path)
+                            )
+                        except Exception as e:
+                            print(f"Failed to download Google profile picture: {e}")
+            
+            # Update last_online
+            db.query(
+                "UPDATE users SET last_online = CURRENT_TIMESTAMP WHERE id = %s",
+                (user_id,)
+            )
+            
+            # Get user data
+            user = db.query(
+                "SELECT id, username, email FROM users WHERE id = %s",
+                (user_id,)
+            )[0]
+        
+        # Generate JWT token
+        token = generate_token(user_id)
+        
+        # Return token (frontend will handle redirect)
+        return jsonify({
+            'message': 'Google login successful',
+            'token': token,
+            'user': {
+                'id': user['id'],
+                'username': user['username'],
+                'email': user['email']
+            }
+        }), 200
+    
+    except ValueError as e:
+        return jsonify({'error': f'Invalid token: {str(e)}'}), 400
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Google login failed: {str(e)}'}), 500

@@ -312,6 +312,33 @@ def seed_visits(cursor, user_ids):
     print(f"✓ Created {visits_created} visits")
 
 
+def seed_images(cursor, user_ids):
+    """Generate placeholder profile images for users."""
+    print("Generating profile images...")
+    
+    # Placeholder image URLs (using picsum.photos or similar)
+    # In production, you'd use actual images or a local placeholder
+    images_created = 0
+    
+    for user_id in user_ids:
+        # Each user gets 1-5 images
+        num_images = random.randint(1, 5)
+        
+        for i in range(num_images):
+            # Use a placeholder image path
+            # Format: /static/uploads/seed/placeholder_{user_id}_{i}.jpg
+            file_path = f"/static/uploads/seed/placeholder_{user_id}_{i}.jpg"
+            is_profile_pic = (i == 0)  # First image is profile pic
+            
+            cursor.execute("""
+                INSERT INTO images (user_id, file_path, is_profile_pic)
+                VALUES (%s, %s, %s)
+            """, (user_id, file_path, is_profile_pic))
+            images_created += 1
+    
+    print(f"✓ Created {images_created} images for {len(user_ids)} users")
+
+
 def main():
     parser = argparse.ArgumentParser(description='Seed Matcha database with fake profiles')
     parser.add_argument('--count', type=int, default=500, help='Number of profiles to generate')
@@ -335,6 +362,7 @@ def main():
         create_tags(cursor)
         user_ids = seed_users(cursor, args.count)
         seed_user_tags(cursor, user_ids)
+        seed_images(cursor, user_ids)
         seed_likes(cursor, user_ids)
         seed_visits(cursor, user_ids)
         
