@@ -1,5 +1,6 @@
 from flask import Flask
 from flask_socketio import SocketIO
+from flask_cors import CORS
 from config import Config
 
 # Global SocketIO instance
@@ -10,6 +11,9 @@ def create_app():
     """Application factory pattern for Flask"""
     app = Flask(__name__)
     app.config.from_object(Config)
+    
+    # Enable CORS for frontend
+    CORS(app, resources={r"/api/*": {"origins": ["http://localhost:3000", "http://127.0.0.1:3000"]}}, supports_credentials=True)
     
     # Initialize SocketIO
     socketio.init_app(app, cors_allowed_origins="*")

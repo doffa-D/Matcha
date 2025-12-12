@@ -344,12 +344,19 @@ def get_suggestions(current_user_id):
         filter_tag_ids = []
         if tag_ids_str:
             filter_tag_ids = [int(t) for t in tag_ids_str.split(',') if t.strip().isdigit()]
-        
+        import logging
+        logging.basicConfig(level=logging.INFO)
+
+        logging.info(f"filter_tag_ids: {filter_tag_ids}")
         with Database() as db:
             # =================================================================
             # STEP 2: Get current user's info
             # =================================================================
             me = get_current_user_info(db, current_user_id)
+            print(f"me: {me}")
+            import logging
+            logging.basicConfig(level=logging.INFO)
+            logging.info(f"me: {me}")
             if not me:
                 return jsonify({'error': 'User not found'}), 404
             

@@ -11,7 +11,7 @@ build: sync-env
 
 # Start containers in detached mode
 up: sync-env
-	docker-compose up -d
+	docker compose up --build -d
 
 # Stop, rebuild, and start containers
 rebuild: sync-env

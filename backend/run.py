@@ -15,9 +15,9 @@ if __name__ == '__main__':
         hostname='0.0.0.0',
         port=5000,
         application=app,
-        use_reloader=debug_mode,
-        reloader_type=reloader_type,
-        use_debugger=debug_mode
+        use_reloader=True,
+        reloader_type="stat",
+        use_debugger=True
     )
 
 
