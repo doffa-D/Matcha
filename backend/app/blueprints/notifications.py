@@ -56,3 +56,18 @@ def mark_read(current_user_id, notif_id):
             (notif_id, current_user_id)
         )
         return jsonify({'message': 'Marked as read'}), 200
+
+
+@bp.route('/read-all', methods=['PUT'])
+@token_required
+def mark_all_read(current_user_id):
+    """Mark all notifications as read for the current user."""
+    with Database() as db:
+        updated_count = db.query(
+            "UPDATE notifications SET is_read = TRUE WHERE user_id = %s AND is_read = FALSE",
+            (current_user_id,)
+        )
+        return jsonify({
+            'message': 'All notifications marked as read',
+            'updated_count': updated_count
+        }), 200
