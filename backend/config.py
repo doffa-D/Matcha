@@ -15,7 +15,7 @@ class Config:
     DB_PASSWORD = os.getenv("DB_PASSWORD")
     JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
     JWT_ALGORITHM = "HS256"
-    JWT_EXPIRATION_HOURS = 24 
+    JWT_EXPIRATION_HOURS = 24
     EMAIL_HOST = os.getenv("EMAIL_HOST")
     EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
     EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
@@ -27,12 +27,12 @@ class Config:
     GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
     GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
     GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:5000/api/auth/google/callback")
-    
+    CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
+
+
 class DevelopmentConfig(Config):
     DEBUG = True
 
 
 class ProductionConfig(Config):
     DEBUG = False
-
-

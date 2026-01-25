@@ -2,6 +2,7 @@ from flask import Flask
 from flask_socketio import SocketIO
 from flask_cors import CORS
 from config import Config
+import os
 
 # Global SocketIO instance
 socketio = SocketIO()
@@ -9,11 +10,14 @@ socketio = SocketIO()
 
 def create_app():
     """Application factory pattern for Flask"""
-    app = Flask(__name__)
+    backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    static_folder = os.path.join(backend_dir, 'static')
+    
+    app = Flask(__name__, static_folder=static_folder, static_url_path='/static')
     app.config.from_object(Config)
     
     # Enable CORS for frontend
-    CORS(app, resources={r"/api/*": {"origins": ["http://localhost:3000", "http://127.0.0.1:3000"]}}, supports_credentials=True)
+    CORS(app, resources={r"/api/*": {"origins": Config.CORS_ORIGINS}}, supports_credentials=True)
     
     # Initialize SocketIO
     socketio.init_app(app, cors_allowed_origins="*")
