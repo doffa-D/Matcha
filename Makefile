@@ -1,39 +1,43 @@
-.PHONY: build up down stop logs shell db-shell restart clean rebuild sync-env db-migrate
-
-# Sync backend/.env to root .env for docker-compose variable substitution only
-# Note: The actual .env file is backend/.env, root .env is temporary for docker-compose
-sync-env:
-	@powershell -Command "if (Test-Path 'backend\.env') { Copy-Item -Path 'backend\.env' -Destination '.env' -Force; Write-Host 'Synced backend/.env to root .env for docker-compose' } else { Write-Host 'ERROR: backend/.env not found!' ; exit 1 }"
+.PHONY: build up down stop logs shell db-shell restart clean rebuild db-migrate db-seed fresh \
+        frontend-install frontend-dev frontend-build frontend-logs
 
 # Build Docker images
-build: sync-env
+build:
 	docker-compose build
 
-# Start containers in detached mode
-up: sync-env
-	docker compose up --build -d
+# Start all containers in detached mode
+up:
+	docker-compose up --build -d
+
+# Start only backend and database (no frontend)
+up-backend:
+	docker-compose up --build -d postgres backend
 
 # Stop, rebuild, and start containers
-rebuild: sync-env
+rebuild:
 	docker-compose down
 	docker-compose build
 	docker-compose up -d
 
 # Stop and remove containers
-down: sync-env
+down:
 	docker-compose down
 
 # Stop containers without removing
-stop: sync-env
+stop:
 	docker-compose stop
 
-# View container logs
+# View all container logs
 logs:
 	docker-compose logs -f
 
 # View backend logs only
 logs-backend:
 	docker-compose logs -f backend
+
+# View frontend logs only
+logs-frontend:
+	docker-compose logs -f frontend
 
 # View postgres logs only
 logs-db:
@@ -43,22 +47,61 @@ logs-db:
 shell:
 	docker-compose exec backend /bin/bash
 
+# Access frontend container shell
+shell-frontend:
+	docker-compose exec frontend /bin/sh
+
 # Access PostgreSQL shell
 db-shell:
 	docker-compose exec postgres psql -U $$(docker-compose exec -T postgres printenv POSTGRES_USER | tr -d '\r') -d $$(docker-compose exec -T postgres printenv POSTGRES_DB | tr -d '\r')
 
-# Restart containers
-restart: sync-env
+# Restart all containers
+restart:
 	docker-compose restart
 
+# Restart frontend only
+restart-frontend:
+	docker-compose restart frontend
+
 # Clean up containers, volumes, and images
-clean: sync-env
+clean:
 	docker-compose down -v --rmi all
 
 # Start containers and show logs
-start: sync-env
+start:
 	docker-compose up
 
 # Run database migrations
-db-migrate: sync-env
-	.\venv\Scripts\python.exe backend\scripts\migrate.py
+db-migrate:
+	python backend/scripts/migrate.py
+
+# Seed the database with fake data
+db-seed:
+	python backend/scripts/seed.py --count 100 --clear
+
+# Fresh start: clean everything, rebuild, migrate, and seed
+fresh: clean
+	docker-compose up --build -d
+	@echo "Waiting for database to be ready..."
+	@powershell -Command "Start-Sleep -Seconds 5"
+	python backend/scripts/migrate.py
+	python backend/scripts/seed.py --count 100 --clear
+	@echo "Fresh start complete!"
+
+# --- Frontend local development (without Docker) ---
+
+# Install frontend dependencies locally
+frontend-install:
+	cd frontend && pnpm install
+
+# Run frontend dev server locally
+frontend-dev:
+	cd frontend && pnpm dev
+
+# Build frontend for production locally
+frontend-build:
+	cd frontend && pnpm build
+
+# Format frontend code
+frontend-format:
+	cd frontend && pnpm format

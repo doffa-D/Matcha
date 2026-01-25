@@ -3,7 +3,7 @@ services:
     image: postgres:15-alpine
     container_name: matcha_postgres
     env_file:
-      - backend/.env
+      - .env
     environment:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}
@@ -26,7 +26,7 @@ services:
       dockerfile: Dockerfile
     container_name: matcha_backend
     env_file:
-      - backend/.env
+      - .env
     environment:
       DB_HOST: postgres
     ports:
@@ -39,6 +39,28 @@ services:
     networks:
       - matcha-network
     command: python run.py
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: dev
+    container_name: matcha_frontend
+    env_file:
+      - .env
+    environment:
+      VITE_API_URL: http://localhost:5000/api
+      VITE_IMAGES_URL: http://localhost:5000
+      VITE_SOCKET_URL: http://localhost:5000
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    networks:
+      - matcha-network
 
 volumes:
   postgres_data:
