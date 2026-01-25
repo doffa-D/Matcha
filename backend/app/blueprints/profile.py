@@ -65,8 +65,9 @@ def get_profile(current_user_id):
 
             # Get user images
             images = db.query(
-                """SELECT id, file_path, created_at
-                   FROM images WHERE user_id = %s ORDER BY created_at ASC""",
+                """SELECT id, file_path, is_profile_pic, created_at
+                   FROM images WHERE user_id = %s 
+                   ORDER BY is_profile_pic DESC, created_at ASC""",
                 (current_user_id,)
             )
 
