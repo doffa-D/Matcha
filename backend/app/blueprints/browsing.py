@@ -453,7 +453,9 @@ def get_suggestions(current_user_id):
                     'tags': tags,
                     'profile_image': profile_image,
                     'is_online': is_online(user['last_online']),
-                    'last_online': user['last_online'].isoformat() if user['last_online'] else None
+                    'last_online': user['last_online'].isoformat() if user['last_online'] else None,
+                    'latitude': float(user['latitude']) if user['latitude'] else None,
+                    'longitude': float(user['longitude']) if user['longitude'] else None
                 })
             
             # =================================================================
