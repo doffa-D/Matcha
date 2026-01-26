@@ -1,11 +1,10 @@
-import React, { useState } from "react";
-import { MapPin, Check, X, Eye, Heart, Loader2 } from "lucide-react";
+import React from "react";
+import { MapPin, Check, X, Eye, Heart } from "lucide-react";
 import { User } from "@/types";
 import { FameIndicator } from "./ui/fame-indicator";
 import { Badge } from "./ui/badge";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { getImageUrl } from "@/lib/utils";
-import { likeUser, unlikeUser } from "@/api/users";
 
 // Generate avatar URL - uses user's first photo or falls back to DiceBear avatar
 const getAvatarUrl = (user: User) => {
@@ -19,50 +18,7 @@ const getFallbackAvatar = (userId: string) =>
   `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
 
 export const ProfileCard = ({ user }: { user: User }) => {
-  const navigate = useNavigate();
   const avatarUrl = getAvatarUrl(user);
-  const [isLiked, setIsLiked] = useState(false);
-  const [isLiking, setIsLiking] = useState(false);
-  const [isHidden, setIsHidden] = useState(false);
-
-  const handleLike = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (isLiking) return;
-
-    setIsLiking(true);
-    try {
-      if (isLiked) {
-        await unlikeUser(Number(user.id));
-        setIsLiked(false);
-      } else {
-        const { data } = await likeUser(Number(user.id));
-        setIsLiked(true);
-        if (data.connected) {
-          // It's a match! You could show a toast or modal here
-          console.log("It's a match!");
-        }
-      }
-    } catch (error) {
-      console.error("Failed to like/unlike user:", error);
-    } finally {
-      setIsLiking(false);
-    }
-  };
-
-  const handleViewProfile = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    navigate({ to: "/profile/$userId", params: { userId: user.id } });
-  };
-
-  const handleSkip = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsHidden(true);
-  };
-
-  if (isHidden) return null;
 
   return (
     <div
@@ -138,35 +94,14 @@ export const ProfileCard = ({ user }: { user: User }) => {
 
       {/* Action Bar */}
       <div className="absolute bottom-0 w-full h-[60px] border-t border-gray-200 flex items-center justify-around bg-white">
-        <button
-          onClick={handleSkip}
-          className="p-3 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-          title="Skip"
-        >
+        <button className="p-3 rounded-full text-gray-500 hover:bg-gray-50 transition-colors">
           <X className="w-6 h-6" />
         </button>
-        <button
-          onClick={handleViewProfile}
-          className="p-3 rounded-full text-gray-500 hover:text-matcha hover:bg-matcha/10 transition-colors"
-          title="View profile"
-        >
+        <button className="p-3 rounded-full text-gray-500 hover:bg-gray-50 transition-colors">
           <Eye className="w-6 h-6" />
         </button>
-        <button
-          onClick={handleLike}
-          disabled={isLiking}
-          className={`p-3 rounded-full transition-all ${
-            isLiked
-              ? "text-red-500 bg-red-50"
-              : "text-gray-500 hover:text-red-500 hover:bg-red-50"
-          } hover:scale-110`}
-          title={isLiked ? "Unlike" : "Like"}
-        >
-          {isLiking ? (
-            <Loader2 className="w-7 h-7 animate-spin" />
-          ) : (
-            <Heart className={`w-7 h-7 ${isLiked ? "fill-current" : ""}`} />
-          )}
+        <button className="p-3 rounded-full text-gray-500  hover:text-red-500 hover:bg-red-50 hover:scale-110 transition-all">
+          <Heart className="w-7 h-7 hover:fill-current" />
         </button>
       </div>
     </div>
