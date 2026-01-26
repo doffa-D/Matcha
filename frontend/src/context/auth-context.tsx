@@ -185,10 +185,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
     storage.setToken(data.token);
     storage.setUser(data.user);
 
-    // Update state
+    // Fetch profile immediately after login to check completeness
+    const { data: profile } = await getMyProfile();
+
+    // Update state with user and profile
     setState({
       user: data.user,
-      profile: null, // Will be fetched when needed
+      profile,
       token: data.token,
       isAuthenticated: true,
       isLoading: false,
