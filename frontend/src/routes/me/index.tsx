@@ -271,7 +271,7 @@ function ProfileCompletenessIndicator({
 }
 
 function MyProfilePage() {
-  const { logout } = useAuth();
+  const { logout, refreshProfile } = useAuth();
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [editedProfile, setEditedProfile] = useState<MyProfile | null>(null);
@@ -326,6 +326,7 @@ function MyProfilePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["myProfile"] });
+      refreshProfile(); // Update auth context
       setImageError(null);
     },
     onError: (error: any) => {
@@ -343,6 +344,7 @@ function MyProfilePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["myProfile"] });
+      refreshProfile(); // Update auth context
       setImageError(null);
     },
     onError: (error: any) => {
@@ -360,6 +362,7 @@ function MyProfilePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["myProfile"] });
+      refreshProfile(); // Update auth context
       setImageError(null);
     },
     onError: (error: any) => {
@@ -412,6 +415,7 @@ function MyProfilePage() {
 
       // Invalidate and refetch profile data
       queryClient.invalidateQueries({ queryKey: ["myProfile"] });
+      await refreshProfile(); // Update auth context for isProfileComplete check
       setIsEditing(false);
       setEditedProfile(null);
     } catch (error: any) {
@@ -549,6 +553,7 @@ function MyProfilePage() {
 
       // Invalidate queries to refetch profile with new location
       queryClient.invalidateQueries({ queryKey: ["myProfile"] });
+      refreshProfile(); // Update auth context
 
       // Update edited profile if in edit mode
       if (editedProfile) {
@@ -601,6 +606,7 @@ function MyProfilePage() {
 
       // Invalidate queries to refetch profile
       queryClient.invalidateQueries({ queryKey: ["myProfile"] });
+      refreshProfile(); // Update auth context
 
       // Update edited profile if in edit mode
       if (editedProfile) {
