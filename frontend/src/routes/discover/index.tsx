@@ -142,12 +142,16 @@ function DiscoverPage() {
   const users =
     data?.pages.flatMap((page) => page.users.map(transformToUser)) ?? [];
 
+  // Keep raw browsing users for the map
+  const browsingUsers =
+    data?.pages.flatMap((page) => page.users) ?? [];
+
   const totalCount = data?.pages[0]?.pagination.total ?? 0;
 
   return (
     <div className="max-w-[90rem] mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="flex gap-8">
-        <FilterSidebar filters={filters} setFilters={setFilters} />
+        <FilterSidebar filters={filters} setFilters={setFilters} users={browsingUsers} />
 
         <div className="flex-1">
           <div className="flex items-center justify-between mb-6">

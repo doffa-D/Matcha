@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Filter, Search, ChevronUp, X } from "lucide-react";
+import { Filter, Search, X } from "lucide-react";
 import { FilterState, FILTER_DEFAULTS } from "@/types";
 import { INITIAL_FILTERS } from "@/lib/constants";
 import { DualRangeSlider } from "@/components/ui/dual-range-slider";
@@ -9,14 +9,22 @@ import { Slider } from "./ui/slider";
 import { motion, AnimatePresence } from "framer-motion";
 import { getTags } from "@/api/tags";
 import { useQuery } from "@tanstack/react-query";
-import { Tag } from "@/api/types";
+import { LeafletMap, MapUser } from "./ui/leaflet-map";
+import { useNavigate } from "@tanstack/react-router";
+import { BrowsingUser } from "@/api/types";
 
 interface FilterSidebarProps {
   filters: FilterState;
   setFilters: React.Dispatch<React.SetStateAction<FilterState>>;
+  users?: BrowsingUser[];
 }
 
-const ExpandableBox = () => {
+interface ExpandableBoxProps {
+  users: MapUser[];
+  onUserClick: (userId: number) => void;
+}
+
+const ExpandableBox = ({ users, onUserClick }: ExpandableBoxProps) => {
   const [open, setOpen] = useState(false);
 
   return (
@@ -26,15 +34,11 @@ const ExpandableBox = () => {
         className="w-full h-[90px] flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity relative overflow-hidden group"
         onClick={() => setOpen(!open)}
       >
-        <img
-          src="https://media.istockphoto.com/id/664767884/vector/doodle-style-world-map-look-like-children-craft-painting.jpg?s=612x612&w=is&k=20&c=UVfhwnmf6moWcD5mXIyGUDTx_sE8vejAckgaW0dbqA4="
-          alt="World map preview"
-          className="w-full h-full object-cover"
-        />
+        <LeafletMap zoom={2} users={users} />
 
-        <div className="absolute inset-0 bg-black/20 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+        <div className="absolute inset-0 bg-black/20 group-hover:bg-black/30 transition-colors flex items-center justify-center pointer-events-none">
           <span className="text-white text-xs font-medium bg-black/40 px-3 py-1 rounded-full">
-            {open ? "Hide Map" : "Click to view map"}
+            {open ? "Hide Map" : `View ${users.length} users on map`}
           </span>
         </div>
       </div>
@@ -75,11 +79,7 @@ const ExpandableBox = () => {
                   </button>
 
                   <div className="w-full h-full overflow-hidden">
-                    <img
-                      src="https://media.istockphoto.com/id/664767884/vector/doodle-style-world-map-look-like-children-craft-painting.jpg?s=612x612&w=is&k=20&c=UVfhwnmf6moWcD5mXIyGUDTx_sE8vejAckgaW0dbqA4="
-                      alt="Doodle-style world map"
-                      className="w-full h-full object-cover"
-                    />
+                    <LeafletMap zoom={4} users={users} onUserClick={onUserClick} />
                   </div>
                 </motion.div>
               </>
@@ -90,7 +90,8 @@ const ExpandableBox = () => {
     </>
   );
 };
-export const FilterSidebar = ({ filters, setFilters }: FilterSidebarProps) => {
+export const FilterSidebar = ({ filters, setFilters, users = [] }: FilterSidebarProps) => {
+  const navigate = useNavigate();
   const [tagSearch, setTagSearch] = useState("");
   const [showAllTags, setShowAllTags] = useState(false);
 
@@ -104,6 +105,24 @@ export const FilterSidebar = ({ filters, setFilters }: FilterSidebarProps) => {
   });
 
   const allTags = tagsData?.tags ?? [];
+
+  // Transform BrowsingUser to MapUser for the map component
+  const mapUsers: MapUser[] = useMemo(() => 
+    users.map((u) => ({
+      id: u.id,
+      username: u.username,
+      first_name: u.first_name,
+      latitude: u.latitude,
+      longitude: u.longitude,
+      profile_image: u.profile_image,
+      is_online: u.is_online,
+    })),
+    [users]
+  );
+
+  const handleUserClick = (userId: number) => {
+    navigate({ to: "/profile/$userId", params: { userId: String(userId) } });
+  };
 
   // Local state for immediate UI updates (before debounce)
   const [localAgeRange, setLocalAgeRange] = useState<[number, number]>(
@@ -331,7 +350,7 @@ export const FilterSidebar = ({ filters, setFilters }: FilterSidebarProps) => {
 
       {/* Bottom section - full width, 90px height */}
       <div className="absolute bottom-0 left-0 w-full h-[90px]  border-neutral-200 flex items-center justify-center  bg-white">
-        <ExpandableBox />
+        <ExpandableBox users={mapUsers} onUserClick={handleUserClick} />
       </div>
     </div>
   );

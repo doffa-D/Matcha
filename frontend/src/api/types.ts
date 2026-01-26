@@ -117,6 +117,8 @@ export interface BrowsingUser {
   profile_image: string | null;
   is_online: boolean;
   last_online: string | null;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 export interface Pagination {
