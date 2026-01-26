@@ -79,13 +79,14 @@ db-migrate:
 db-seed:
 	python backend/scripts/seed.py --count 100 --clear
 
-# Fresh start: clean everything, rebuild, migrate, and seed
-fresh: clean
+# Fresh start: remove containers and volumes (keep images cached), rebuild, migrate, and seed
+fresh:
+	docker-compose down -v
 	docker-compose up --build -d
 	@echo "Waiting for database to be ready..."
 	@powershell -Command "Start-Sleep -Seconds 5"
 	python backend/scripts/migrate.py
-	python backend/scripts/seed.py --count 100 --clear
+	python backend/scripts/seed.py --count 500 --clear
 	@echo "Fresh start complete!"
 
 # --- Frontend local development (without Docker) ---
