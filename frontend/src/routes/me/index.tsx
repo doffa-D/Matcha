@@ -4,7 +4,6 @@ import {
   User,
   Mail,
   MapPin,
-  Camera,
   X,
   Plus,
   Save,
@@ -13,7 +12,6 @@ import {
   Heart,
   Navigation,
   Edit3,
-  Star,
   Loader2,
   AlertCircle,
   CheckCircle2,
@@ -37,9 +35,6 @@ import { getImageUrl } from "@/lib/utils";
 import {
   getMyProfile,
   updateProfile as apiUpdateProfile,
-  uploadImages,
-  deleteImage,
-  setProfileImage,
   updateLocation,
 } from "@/api/profile";
 import { addTags, removeTag } from "@/api/tags";
@@ -52,6 +47,7 @@ import type {
   MyProfile as ApiMyProfile,
   UpdateProfileRequest,
 } from "@/api/types";
+import { PhotoGrid } from "@/components/profile/PhotoGrid";
 
 interface SearchParams {
   incomplete?: string;
@@ -100,14 +96,6 @@ interface MyProfile {
   gpsEnabled: boolean;
 }
 
-// Image upload validation constants
-const ALLOWED_IMAGE_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/gif",
-  "image/webp",
-];
-const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
 const MAX_IMAGES = 5;
 
 interface ProfileVisitor {
@@ -180,17 +168,6 @@ const transformApiProfile = (apiProfile: ApiMyProfile): MyProfile => {
     },
     gpsEnabled: !!apiProfile.location,
   };
-};
-
-// Validate image file
-const validateImageFile = (file: File): string | null => {
-  if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-    return `Invalid file type. Allowed: JPG, PNG, GIF, WebP`;
-  }
-  if (file.size > MAX_IMAGE_SIZE) {
-    return `File too large. Maximum size: 5MB`;
-  }
-  return null;
 };
 
 const transformVisitors = (apiProfile: ApiMyProfile): ProfileVisitor[] => {
@@ -281,10 +258,6 @@ function MyProfilePage() {
   // Get search params to check if redirected due to incomplete profile
   const { incomplete } = Route.useSearch();
 
-  // Image upload state
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [imageError, setImageError] = useState<string | null>(null);
-
   // Location state
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
@@ -310,67 +283,11 @@ function MyProfilePage() {
   const visitors = apiProfile ? transformVisitors(apiProfile) : [];
   const likers = apiProfile ? transformLikers(apiProfile) : [];
 
-  
-
   // Check profile completeness
   const profileCompleteness = apiProfile
     ? checkProfileCompleteness(apiProfile)
     : null;
   const isProfileComplete = profileCompleteness?.isComplete ?? false;
-
-  // Image upload mutation
-  const uploadMutation = useMutation({
-    mutationFn: async (file: File) => {
-      const response = await uploadImages(file);
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["myProfile"] });
-      refreshProfile(); // Update auth context
-      setImageError(null);
-    },
-    onError: (error: any) => {
-      const message =
-        error?.data?.error || error?.message || "Failed to upload image";
-      setImageError(message);
-    },
-  });
-
-  // Delete image mutation
-  const deleteMutation = useMutation({
-    mutationFn: async (imageId: number) => {
-      const response = await deleteImage(imageId);
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["myProfile"] });
-      refreshProfile(); // Update auth context
-      setImageError(null);
-    },
-    onError: (error: any) => {
-      const message =
-        error?.data?.error || error?.message || "Failed to delete image";
-      setImageError(message);
-    },
-  });
-
-  // Set profile image mutation
-  const setProfileMutation = useMutation({
-    mutationFn: async (imageId: number) => {
-      const response = await setProfileImage(imageId);
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["myProfile"] });
-      refreshProfile(); // Update auth context
-      setImageError(null);
-    },
-    onError: (error: any) => {
-      const message =
-        error?.data?.error || error?.message || "Failed to set profile image";
-      setImageError(message);
-    },
-  });
 
   const handleSave = async () => {
     if (!editedProfile || !apiProfile || isSaving) return;
@@ -436,65 +353,6 @@ function MyProfilePage() {
       setEditedProfile(profile);
       setIsEditing(true);
     }
-  };
-
-  // Handle clicking on a photo slot to upload
-  const handlePhotoUpload = () => {
-    // Check if we've reached max images
-    const currentPhotos = apiProfile?.images.length || 0;
-    if (currentPhotos >= MAX_IMAGES) {
-      setImageError(
-        `Maximum ${MAX_IMAGES} images allowed. Delete an image first.`,
-      );
-      return;
-    }
-
-    setImageError(null);
-    fileInputRef.current?.click();
-  };
-
-  // Handle file selection from file picker
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
-
-    // Validate file
-    const validationError = validateImageFile(file);
-    if (validationError) {
-      setImageError(validationError);
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-      return;
-    }
-
-    // Upload file
-    uploadMutation.mutate(file);
-
-    // Reset file input for future uploads
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  };
-
-  // Handle photo deletion - pass the photo ID directly to avoid stale data issues
-  const handlePhotoRemove = (photoId: number) => {
-    // Confirm deletion
-    if (!window.confirm("Are you sure you want to delete this photo?")) {
-      return;
-    }
-
-    setImageError(null);
-    deleteMutation.mutate(photoId);
-  };
-
-  // Handle setting a photo as profile picture - pass the photo ID directly
-  const handleSetProfilePhoto = (photoId: number) => {
-    setImageError(null);
-    setProfileMutation.mutate(photoId);
   };
 
   const handleAddTag = (tag: string) => {
@@ -762,139 +620,7 @@ function MyProfilePage() {
           {/* LEFT COLUMN - Main Info */}
           <div className="lg:col-span-2 space-y-6">
             {/* Photos Section */}
-            <section className="bg-white rounded-2xl p-5 shadow-sm border border-neutral-100">
-              <h2 className="text-xs font-bold uppercase tracking-widest text-neutral-400 mb-4 flex items-center gap-2">
-                <Camera className="w-4 h-4" />
-                Photos ({photos.filter((p) => p.url).length}/{MAX_IMAGES})
-              </h2>
-
-              {/* Hidden file input */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".jpg,.jpeg,.png,.gif,.webp"
-                onChange={handleFileSelect}
-                className="hidden"
-              />
-
-              {/* Error message */}
-              {imageError && (
-                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-sm text-red-600">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span>{imageError}</span>
-                  <button
-                    onClick={() => setImageError(null)}
-                    className="ml-auto p-1 hover:bg-red-100 rounded-full transition-colors"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              )}
-
-              {/* Global upload indicator */}
-              {uploadMutation.isPending && (
-                <div className="mb-4 p-3 bg-matcha-light border border-matcha/30 rounded-xl flex items-center gap-3 text-sm text-matcha-dark">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Uploading image...</span>
-                </div>
-              )}
-
-              <div className="grid grid-cols-5 gap-3">
-                {photos.map((photo, index) => {
-                  const isDeleting =
-                    deleteMutation.isPending &&
-                    deleteMutation.variables === photo.id;
-                  const isSettingProfile =
-                    setProfileMutation.isPending &&
-                    setProfileMutation.variables === photo.id;
-                  const isProcessing = isDeleting || isSettingProfile;
-
-                  return (
-                    <div
-                      key={index}
-                      className={`
-                        relative aspect-square rounded-xl overflow-hidden border-2 transition-all
-                        ${
-                          photo.isProfilePic && photo.url
-                            ? "ring-2 ring-matcha ring-offset-2 border-matcha"
-                            : "border-neutral-200"
-                        }
-                        ${!photo.url ? "bg-neutral-100" : ""}
-                      `}
-                    >
-                      {/* Loading overlay for delete/set-profile */}
-                      {isProcessing && (
-                        <div className="absolute inset-0 bg-black/50 z-10 flex items-center justify-center">
-                          <Loader2 className="w-5 h-5 animate-spin text-white" />
-                        </div>
-                      )}
-
-                      {photo.url ? (
-                        <>
-                          <img
-                            src={photo.url}
-                            alt={`Photo ${index + 1}`}
-                            className="w-full h-full object-cover"
-                          />
-                          {photo.isProfilePic && (
-                            <div className="absolute top-1 left-1 bg-matcha text-white text-[10px] font-bold px-1.5 py-0.5 rounded-md">
-                              Profile
-                            </div>
-                          )}
-                          {isEditing && !isProcessing && photo.id && (
-                            <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                              {!photo.isProfilePic && (
-                                <button
-                                  onClick={() =>
-                                    handleSetProfilePhoto(photo.id!)
-                                  }
-                                  className="p-1.5 bg-white rounded-full hover:bg-matcha-light transition-colors"
-                                  title="Set as profile photo"
-                                >
-                                  <Star className="w-3.5 h-3.5 text-neutral-700" />
-                                </button>
-                              )}
-                              <button
-                                onClick={() => handlePhotoRemove(photo.id!)}
-                                className="p-1.5 bg-white rounded-full hover:bg-red-100 transition-colors"
-                                title="Remove photo"
-                              >
-                                <X className="w-3.5 h-3.5 text-red-500" />
-                              </button>
-                            </div>
-                          )}
-                        </>
-                      ) : isEditing ? (
-                        <button
-                          onClick={handlePhotoUpload}
-                          disabled={uploadMutation.isPending}
-                          className="w-full h-full flex flex-col items-center justify-center text-neutral-400 hover:text-matcha hover:bg-matcha-light/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {uploadMutation.isPending ? (
-                            <Loader2 className="w-5 h-5 animate-spin text-matcha" />
-                          ) : (
-                            <>
-                              <Plus className="w-5 h-5" />
-                              <span className="text-[10px] mt-1">Add</span>
-                            </>
-                          )}
-                        </button>
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-neutral-300">
-                          <Camera className="w-5 h-5" />
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-              {isEditing && (
-                <p className="text-xs text-neutral-400 mt-3">
-                  Click the star to set as profile picture. Max 5MB per image
-                  (JPG, PNG, GIF, WebP).
-                </p>
-              )}
-            </section>
+            <PhotoGrid photos={photos} isEditing={isEditing} currentImageCount={photos.filter((p) => p.url).length} />
 
             {/* Personal Information */}
             <section className="bg-white rounded-2xl p-5 shadow-sm border border-neutral-100">
