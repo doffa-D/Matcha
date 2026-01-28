@@ -54,7 +54,7 @@ const ExpandableBox = ({ users, onUserClick }: ExpandableBoxProps) => {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   className="fixed inset-0 bg-black/30"
-                  style={{ zIndex: 99998 }}
+                  style={{ zIndex: 101 }}
                   onClick={() => setOpen(false)}
                 />
 
@@ -69,11 +69,12 @@ const ExpandableBox = ({ users, onUserClick }: ExpandableBoxProps) => {
                     mass: 0.8,
                   }}
                   className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[90vw] max-w-6xl h-[85vh] bg-white rounded-2xl shadow-2xl overflow-hidden"
-                  style={{ zIndex: 99999 }}
+                  style={{ zIndex: 102 }}
                 >
                   <button
                     onClick={() => setOpen(false)}
-                    className="absolute top-4 right-4 p-2 bg-white hover:bg-neutral-100 rounded-full transition-colors shadow-md z-10"
+                    className="absolute  top-4 right-4 p-2 bg-white hover:bg-neutral-100 rounded-full transition-colors shadow-md z-10"
+                    style={{ zIndex: 999 }}
                   >
                     <X className="w-5 h-5 text-neutral-600" />
                   </button>
