@@ -34,10 +34,7 @@ def get_db_config():
     db_host = os.getenv('DB_HOST', 'localhost')
     # If running locally but env says postgres (container name), switch to localhost
     if db_host == 'postgres':
-         # Simple heuristic: check if we can resolve 'postgres'. 
-         # If not (which is likely on host), use 'localhost'.
-         # For now, just defaulting to localhost when 'postgres' is seen on host environment
-         # is the safest bet for the Makefile usage.
+         # Fallback to localhost if running on host machine
          db_host = 'localhost'
     
     return {
