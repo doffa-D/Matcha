@@ -89,8 +89,8 @@ fresh:
 	$(DC) up --build -d
 	@echo "Waiting for database to be ready..."
 	@sleep 5
-	python3 backend/scripts/migrate.py
-	python3 backend/scripts/seed.py --count 500 --clear
+	docker exec matcha_backend python scripts/migrate.py
+	docker exec matcha_backend python scripts/seed.py --count 500 --clear
 	@echo "Fresh start complete!"
 
 # --- Frontend local development (without Docker) ---
