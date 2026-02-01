@@ -1,75 +1,78 @@
 .PHONY: build up down stop logs shell db-shell restart clean rebuild db-migrate db-seed fresh \
         frontend-install frontend-dev frontend-build frontend-logs
 
+# Docker compose with env file
+DC = docker-compose --env-file ./backend/.env
+
 # Build Docker images
 build:
-	docker-compose build
+	$(DC) build
 
 # Start all containers in detached mode
 up:
-	docker-compose up --build -d
+	$(DC) up --build -d
 
 # Start only backend and database (no frontend)
 up-backend:
-	docker-compose up --build -d postgres backend
+	$(DC) up --build -d postgres backend
 
 # Stop, rebuild, and start containers
 rebuild:
-	docker-compose down
-	docker-compose build
-	docker-compose up -d
+	$(DC) down
+	$(DC) build
+	$(DC) up -d
 
 # Stop and remove containers
 down:
-	docker-compose down
+	$(DC) down
 
 # Stop containers without removing
 stop:
-	docker-compose stop
+	$(DC) stop
 
 # View all container logs
 logs:
-	docker-compose logs -f
+	$(DC) logs -f
 
 # View backend logs only
 logs-backend:
-	docker-compose logs -f backend
+	$(DC) logs -f backend
 
 # View frontend logs only
 logs-frontend:
-	docker-compose logs -f frontend
+	$(DC) logs -f frontend
 
 # View postgres logs only
 logs-db:
-	docker-compose logs -f postgres
+	$(DC) logs -f postgres
 
 # Access backend container shell
 shell:
-	docker-compose exec backend /bin/bash
+	$(DC) exec backend /bin/bash
 
 # Access frontend container shell
 shell-frontend:
-	docker-compose exec frontend /bin/sh
+	$(DC) exec frontend /bin/sh
 
 # Access PostgreSQL shell
 db-shell:
-	docker-compose exec postgres psql -U $$(docker-compose exec -T postgres printenv POSTGRES_USER | tr -d '\r') -d $$(docker-compose exec -T postgres printenv POSTGRES_DB | tr -d '\r')
+	$(DC) exec postgres psql -U $$($(DC) exec -T postgres printenv POSTGRES_USER | tr -d '\r') -d $$($(DC) exec -T postgres printenv POSTGRES_DB | tr -d '\r')
 
 # Restart all containers
 restart:
-	docker-compose restart
+	$(DC) restart
 
 # Restart frontend only
 restart-frontend:
-	docker-compose restart frontend
+	$(DC) restart frontend
 
 # Clean up containers, volumes, and images
 clean:
-	docker-compose down -v --rmi all
+	$(DC) down -v --rmi all
 
 # Start containers and show logs
 start:
-	docker-compose up
+	$(DC) up
 
 # Run database migrations
 db-migrate:
@@ -79,10 +82,11 @@ db-migrate:
 db-seed:
 	python backend/scripts/seed.py --count 100 --clear
 
-# Fresh start: remove containers and volumes (keep images cached), rebuild, migrate, and seed
+# Fresh start: remove containers and volumes, rebuild, migrate, and seed
 fresh:
-	docker-compose down -v
-	docker-compose up --build -d
+	$(DC) down -v --remove-orphans
+	docker volume rm matcha_postgres_data 2>NUL || echo "Volume already removed"
+	$(DC) up --build -d
 	@echo "Waiting for database to be ready..."
 	@sleep 5
 	python3 backend/scripts/migrate.py

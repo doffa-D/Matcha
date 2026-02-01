@@ -34,10 +34,7 @@ def get_db_config():
     db_host = os.getenv('DB_HOST', 'localhost')
     # If running locally but env says postgres (container name), switch to localhost
     if db_host == 'postgres':
-         # Simple heuristic: check if we can resolve 'postgres'. 
-         # If not (which is likely on host), use 'localhost'.
-         # For now, just defaulting to localhost when 'postgres' is seen on host environment
-         # is the safest bet for the Makefile usage.
+         # Fallback to localhost if running on host machine
          db_host = 'localhost'
     
     return {
@@ -123,8 +120,7 @@ def migrate():
 
         if not is_migration_applied(cursor, BASE_MIGRATION_NAME):
             if users_exists:
-                print(f"⚠️  'users' table exists but migration '{BASE_MIGRATION_NAME}' not recorded.")
-                print(f"   Marking '{BASE_MIGRATION_NAME}' as applied without running.")
+                # Schema was created by Docker init script - just record it
                 record_migration(cursor, BASE_MIGRATION_NAME)
                 conn.commit()
             elif schema_path.exists():
