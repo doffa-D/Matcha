@@ -32,10 +32,7 @@ load_dotenv(env_path)
 def get_db_config():
     """Get database configuration with host adjustment for local run"""
     db_host = os.getenv('DB_HOST', 'localhost')
-    # If running locally but env says postgres (container name), switch to localhost
-    if db_host == 'postgres':
-         # Fallback to localhost if running on host machine
-         db_host = 'localhost'
+
     
     return {
         'host': db_host,
