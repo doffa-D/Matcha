@@ -85,7 +85,7 @@ db-seed:
 # Fresh start: remove containers and volumes, rebuild, migrate, and seed
 fresh:
 	$(DC) down -v --remove-orphans
-	docker volume rm matcha_postgres_data 2>NUL || echo "Volume already removed"
+	docker volume rm matcha_postgres_data 2>/dev/null || echo "Volume already removed"
 	$(DC) up --build -d
 	@echo "Waiting for database to be ready..."
 	@sleep 5
