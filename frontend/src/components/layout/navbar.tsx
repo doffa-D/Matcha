@@ -86,16 +86,16 @@ export const Navbar = ({ activeTab }: NavbarProps) => {
     <nav className="sticky top-0 z-50 bg-white shadow-nav h-[72px]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center justify-between">
         {/* Logo */}
-        <div
-          className="flex items-center gap-0.5  cursor-pointer"
-          // onClick={() => setActiveTab("home")}
+        <Link
+          to="/discover"
+          className="flex items-center gap-0.5 cursor-pointer"
         >
           <img src="/logo.svg" alt="Logo" className="h-8 sm:h-8 " />
 
           <span className="text-2xl font-bold text-neutral-900 tracking-tight">
             Matcha
           </span>
-        </div>
+        </Link>
 
         {/* Desktop Nav */}
         <div className="hidden md:flex items-center space-x-8 h-full">

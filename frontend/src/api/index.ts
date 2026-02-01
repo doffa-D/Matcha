@@ -15,6 +15,7 @@ export * as users from './users';
 export * as tags from './tags';
 export * as notifications from './notifications';
 export * as chat from './chat';
+export * as dates from './dates';
 
 // Also export individual functions for convenience
 export {
@@ -71,3 +72,10 @@ export {
   sendMessage,
   markMessagesAsRead,
 } from './chat';
+
+export {
+  // Dates
+  proposeDate,
+  respondToDate,
+  getDateProposals,
+} from './dates';

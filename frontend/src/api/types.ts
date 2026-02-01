@@ -351,3 +351,47 @@ export interface SendMessageResponse {
   message: string;
   data: ChatMessage;
 }
+
+// =============================================================================
+// DATE PROPOSAL TYPES
+// =============================================================================
+
+export interface DateProposal {
+  id: number;
+  sender_id: number;
+  receiver_id: number;
+  date_time: string;
+  location: string;
+  activity: string;
+  status: 'pending' | 'accepted' | 'declined';
+  is_mine: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateDateProposalRequest {
+  date_time: string;
+  location: string;
+  activity: string;
+}
+
+export interface CreateDateProposalResponse {
+  message: string;
+  data: DateProposal;
+}
+
+export interface RespondToDateRequest {
+  status: 'accepted' | 'declined';
+}
+
+export interface RespondToDateResponse {
+  message: string;
+  data: {
+    id: number;
+    status: 'accepted' | 'declined';
+  };
+}
+
+export interface DateProposalsResponse {
+  proposals: DateProposal[];
+}

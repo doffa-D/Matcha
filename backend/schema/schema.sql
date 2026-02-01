@@ -140,7 +140,7 @@ CREATE INDEX idx_reports_created_at ON reports(created_at DESC);
 CREATE TABLE notifications (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    type VARCHAR(50) NOT NULL CHECK (type IN ('like', 'visit', 'message', 'match', 'unlike')),
+    type VARCHAR(50) NOT NULL CHECK (type IN ('like', 'visit', 'message', 'match', 'unlike', 'date_proposal', 'date_accepted', 'date_declined')),
     source_user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     is_read BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -169,3 +169,26 @@ CREATE INDEX idx_messages_conversation ON messages(
     created_at DESC
 );
 CREATE INDEX idx_messages_unread ON messages(receiver_id, is_read) WHERE is_read = FALSE;
+
+
+CREATE TABLE date_proposals (
+    id SERIAL PRIMARY KEY,
+    sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    receiver_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    date_time TIMESTAMP NOT NULL,
+    location VARCHAR(255) NOT NULL,
+    activity VARCHAR(100) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'declined')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT no_self_date CHECK (sender_id != receiver_id)
+);
+
+CREATE INDEX idx_date_proposals_sender_id ON date_proposals(sender_id);
+CREATE INDEX idx_date_proposals_receiver_id ON date_proposals(receiver_id);
+CREATE INDEX idx_date_proposals_status ON date_proposals(status);
+CREATE INDEX idx_date_proposals_conversation ON date_proposals(
+    LEAST(sender_id, receiver_id), 
+    GREATEST(sender_id, receiver_id), 
+    created_at DESC
+);

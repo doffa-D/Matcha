@@ -88,9 +88,9 @@ fresh:
 	docker volume rm matcha_postgres_data 2>NUL || echo "Volume already removed"
 	$(DC) up --build -d
 	@echo "Waiting for database to be ready..."
-	@powershell -Command "Start-Sleep -Seconds 8"
-	python backend/scripts/migrate.py
-	python backend/scripts/seed.py --count 500 --clear
+	@sleep 5
+	python3 backend/scripts/migrate.py
+	python3 backend/scripts/seed.py --count 500 --clear
 	@echo "Fresh start complete!"
 
 # --- Frontend local development (without Docker) ---
