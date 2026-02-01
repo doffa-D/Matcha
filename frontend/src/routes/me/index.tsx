@@ -232,11 +232,11 @@ function ProfileCompletenessIndicator({
           {complete ? (
             <CheckCircle2 className="w-4 h-4 text-matcha shrink-0" />
           ) : (
-            <XCircle className="w-4 h-4 text-amber-500 shrink-0" />
+            <XCircle className="w-4 h-4 text-red-500 shrink-0" />
           )}
           <span
             className={
-              complete ? "text-neutral-600" : "text-amber-700 font-medium"
+              complete ? "text-neutral-600" : "text-red-600 font-medium"
             }
           >
             {label}
@@ -548,16 +548,16 @@ function MyProfilePage() {
       <main className="pt-4 pb-8 max-w-5xl mx-auto px-4 lg:px-6">
         {/* Profile Incomplete Warning Banner */}
         {!isProfileComplete && profileCompleteness && (
-          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6">
+          <div className="bg-white border  rounded-2xl p-4 mb-6">
             <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
               <div className="flex-1">
-                <h3 className="font-semibold text-amber-800 mb-1">
+                <h3 className="font-semibold text-neutral-900 mb-1">
                   {incomplete
                     ? "Complete your profile to continue"
                     : "Your profile is incomplete"}
                 </h3>
-                <p className="text-sm text-amber-700 mb-3">
+                <p className="text-sm text-neutral-500 mb-3">
                   {incomplete
                     ? "You were redirected here because your profile is incomplete. Please fill in all required fields to start browsing and matching with others."
                     : "Complete your profile to unlock all features and start matching with others."}
