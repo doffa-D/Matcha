@@ -620,7 +620,11 @@ function MyProfilePage() {
           {/* LEFT COLUMN - Main Info */}
           <div className="lg:col-span-2 space-y-6">
             {/* Photos Section */}
-            <PhotoGrid photos={photos} isEditing={isEditing} currentImageCount={photos.filter((p) => p.url).length} />
+            <PhotoGrid
+              photos={photos}
+              isEditing={isEditing}
+              currentImageCount={photos.filter((p) => p.url).length}
+            />
 
             {/* Personal Information */}
             <section className="bg-white rounded-2xl p-5 shadow-sm border border-neutral-100">
@@ -1018,7 +1022,9 @@ function MyProfilePage() {
               </h2>
               <div className="flex items-center gap-4">
                 <div className="scale-125 origin-left">
-                  <FameIndicator score={profile?.fameRating || 0} />
+                  <FameIndicator
+                    score={Number(profile?.fameRating?.toFixed(1)) || 0}
+                  />
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-neutral-900">
