@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, MessageCircle, MoreHorizontal, Search, Send } from "lucide-react";
+import { Loader2, MessageCircle, MoreHorizontal, Search, Send, Calendar } from "lucide-react";
 
 import { MobileNav } from "@/components/layout/MobileNav";
 import { Footer } from "@/components/layout/Footer";
 import { Navbar } from "@/components/layout/navbar";
 import { ProtectedRoute } from "@/components/protected-route";
 import Button from "@/components/ui/button";
-import { getConversations, getMessages, sendMessage, markMessagesAsRead } from "@/api";
-import type { Conversation, ChatMessage } from "@/api/types";
+import { DateProposalForm } from "@/components/DateProposalForm";
+import { DateMessageBubble } from "@/components/DateMessageBubble";
+import { getConversations, getMessages, sendMessage, markMessagesAsRead, proposeDate, respondToDate, getDateProposals } from "@/api";
+import type { Conversation, ChatMessage, DateProposal } from "@/api/types";
 import { getImageUrl } from "@/lib/utils";
 
 export const Route = createFileRoute("/chat/")({
@@ -26,7 +28,7 @@ function Chat() {
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900 font-sans selection:bg-matcha/20 selection:text-matcha-dark">
       <Navbar activeTab={activeTab} />
-      <main className="top-20">
+      <main className="top-20  ">
         <MessagesPage />
       </main>
       <MobileNav activeTab={activeTab} />
@@ -96,6 +98,7 @@ function MessagesPage() {
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [messageInput, setMessageInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [showDateForm, setShowDateForm] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 
@@ -153,6 +156,23 @@ function MessagesPage() {
 
   const messages = messagesData?.messages || [];
 
+  // Fetch date proposals for selected user
+  const {
+    data: dateProposalsData,
+    isLoading: dateProposalsLoading,
+  } = useQuery({
+    queryKey: ["chat", "dateProposals", selectedUserId],
+    queryFn: async () => {
+      if (!selectedUserId) return { proposals: [] };
+      const response = await getDateProposals(selectedUserId);
+      return response.data;
+    },
+    enabled: !!selectedUserId,
+    refetchInterval: 5000,
+  });
+
+  const dateProposals = dateProposalsData?.proposals || [];
+
   // Mark messages as read when selecting a conversation
   useEffect(() => {
     if (selectedUserId && selectedConversation?.unread_count && selectedConversation.unread_count > 0) {
@@ -198,6 +218,40 @@ function MessagesPage() {
     }
   };
 
+  // Propose date mutation
+  const proposeDateMutation = useMutation({
+    mutationFn: async (data: { date_time: string; location: string; activity: string }) => {
+      if (!selectedUserId) throw new Error("No user selected");
+      const response = await proposeDate(selectedUserId, data);
+      return response.data;
+    },
+    onSuccess: () => {
+      setShowDateForm(false);
+      // Invalidate queries to show new proposal
+      queryClient.invalidateQueries({ queryKey: ["chat", "dateProposals", selectedUserId] });
+    },
+    onError: (error: any) => {
+      console.error("Failed to propose date:", error);
+      alert(error.response?.data?.error || "Failed to propose date. Please try again.");
+    },
+  });
+
+  // Respond to date mutation
+  const respondToDateMutation = useMutation({
+    mutationFn: async ({ proposalId, status }: { proposalId: number; status: "accepted" | "declined" }) => {
+      const response = await respondToDate(proposalId, { status });
+      return response.data;
+    },
+    onSuccess: () => {
+      // Invalidate queries to update proposal status
+      queryClient.invalidateQueries({ queryKey: ["chat", "dateProposals", selectedUserId] });
+    },
+    onError: (error: any) => {
+      console.error("Failed to respond to date:", error);
+      alert(error.response?.data?.error || "Failed to respond. Please try again.");
+    },
+  });
+
   // Get current user ID from localStorage
   const getCurrentUserId = (): number | null => {
     try {
@@ -216,7 +270,7 @@ function MessagesPage() {
   const messageGroups = groupMessagesByDate(messages);
 
   return (
-    <div className="max-w-[90rem] mx-auto h-[calc(100vh-72px)]">
+    <div className="max-w-[90rem] mx-auto h-[calc(100vh-72px-64px)] md:h-[calc(100vh-72px)]">
       <div className="bg-white shadow-card h-full flex overflow-hidden border border-neutral-700/5 rounded-2xl">
         {/* Conversations List */}
         <div className="w-[320px] border-r border-neutral-700/5 flex flex-col bg-white">
@@ -304,11 +358,11 @@ function MessagesPage() {
 
             {/* Messages Area */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {messagesLoading ? (
+              {messagesLoading || dateProposalsLoading ? (
                 <div className="flex items-center justify-center h-full">
                   <Loader2 className="w-6 h-6 animate-spin text-matcha" />
                 </div>
-              ) : messages.length === 0 ? (
+              ) : messages.length === 0 && dateProposals.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center">
                   <MessageCircle className="w-16 h-16 text-neutral-200 mb-4" />
                   <p className="text-neutral-500">No messages yet</p>
@@ -317,43 +371,136 @@ function MessagesPage() {
                   </p>
                 </div>
               ) : (
-                messageGroups.map((group) => (
-                  <div key={group.date}>
-                    {/* Date Divider */}
-                    <div className="flex justify-center mb-4">
-                      <span className="bg-neutral-200 text-neutral-600 text-xs px-3 py-1 rounded-full">
-                        {group.date}
-                      </span>
-                    </div>
+                <>
+                  {/* Combine and sort messages and date proposals by timestamp */}
+                  {(() => {
+                    // Create combined array with type indicators
+                    const combined: Array<
+                      | { type: "message"; data: ChatMessage; timestamp: string }
+                      | { type: "date"; data: DateProposal; timestamp: string }
+                    > = [
+                      ...messages.map((msg) => ({
+                        type: "message" as const,
+                        data: msg,
+                        timestamp: msg.created_at,
+                      })),
+                      ...dateProposals.map((proposal) => ({
+                        type: "date" as const,
+                        data: proposal,
+                        timestamp: proposal.created_at,
+                      })),
+                    ];
 
-                    {/* Messages */}
-                    <div className="space-y-4">
-                      {group.messages.map((msg) => {
-                        const isMine = msg.sender_id === currentUserId;
-                        return (
-                          <MessageBubble
-                            key={msg.id}
-                            message={msg}
-                            isMine={isMine}
-                            userImage={
-                              !isMine
-                                ? getImageUrl(selectedConversation.user.profile_image) ||
-                                  `https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedUserId}`
-                                : undefined
+                    // Sort by timestamp
+                    combined.sort((a, b) => 
+                      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+                    );
+
+                    // Group by date
+                    const groups: { [key: string]: typeof combined } = {};
+                    combined.forEach((item) => {
+                      const date = new Date(item.timestamp);
+                      const today = new Date();
+                      const yesterday = new Date(today);
+                      yesterday.setDate(yesterday.getDate() - 1);
+
+                      let dateKey: string;
+                      if (date.toDateString() === today.toDateString()) {
+                        dateKey = "Today";
+                      } else if (date.toDateString() === yesterday.toDateString()) {
+                        dateKey = "Yesterday";
+                      } else {
+                        dateKey = date.toLocaleDateString([], {
+                          weekday: "long",
+                          month: "short",
+                          day: "numeric",
+                        });
+                      }
+
+                      if (!groups[dateKey]) groups[dateKey] = [];
+                      groups[dateKey].push(item);
+                    });
+
+                    return Object.entries(groups).map(([dateLabel, items]) => (
+                      <div key={dateLabel}>
+                        {/* Date Divider */}
+                        <div className="flex justify-center mb-4">
+                          <span className="bg-neutral-200 text-neutral-600 text-xs px-3 py-1 rounded-full">
+                            {dateLabel}
+                          </span>
+                        </div>
+
+                        {/* Messages and Date Proposals */}
+                        <div className="space-y-4">
+                          {items.map((item, idx) => {
+                            if (item.type === "message") {
+                              const msg = item.data;
+                              const isMine = msg.sender_id === currentUserId;
+                              return (
+                                <MessageBubble
+                                  key={`msg-${msg.id}`}
+                                  message={msg}
+                                  isMine={isMine}
+                                  userImage={
+                                    !isMine
+                                      ? getImageUrl(selectedConversation.user.profile_image) ||
+                                        `https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedUserId}`
+                                      : undefined
+                                  }
+                                />
+                              );
+                            } else {
+                              const proposal = item.data;
+                              const isMine = proposal.sender_id === currentUserId;
+                              return (
+                                <DateMessageBubble
+                                  key={`date-${proposal.id}`}
+                                  proposal={proposal}
+                                  isMine={isMine}
+                                  onAccept={(id) =>
+                                    respondToDateMutation.mutate({ proposalId: id, status: "accepted" })
+                                  }
+                                  onDecline={(id) =>
+                                    respondToDateMutation.mutate({ proposalId: id, status: "declined" })
+                                  }
+                                  isResponding={respondToDateMutation.isPending}
+                                />
+                              );
                             }
-                          />
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))
+                          })}
+                        </div>
+                      </div>
+                    ));
+                  })()}
+                </>
               )}
               <div ref={messagesEndRef} />
             </div>
 
             {/* Input Area */}
-            <div className="p-4 bg-white border-t border-neutral-700/5">
+            <div className="p-4 bg-white border-t border-neutral-700/5 space-y-3">
+              {/* Date Proposal Form */}
+              {showDateForm && (
+                <DateProposalForm
+                  onSubmit={(data) => proposeDateMutation.mutate(data)}
+                  onCancel={() => setShowDateForm(false)}
+                  isSubmitting={proposeDateMutation.isPending}
+                />
+              )}
+
+              {/* Message Input */}
               <div className="flex gap-3">
+                <button
+                  onClick={() => setShowDateForm(!showDateForm)}
+                  className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
+                    showDateForm
+                      ? "bg-matcha text-white"
+                      : "bg-neutral-100 hover:bg-neutral-200 text-neutral-600"
+                  }`}
+                  title="Propose a date"
+                >
+                  <Calendar className="w-5 h-5" />
+                </button>
                 <input
                   type="text"
                   placeholder="Type a message..."
